@@ -1,4 +1,4 @@
-"""Three statistical detectors. Named math, no model weights."""
+"""Four statistical detectors. Named math, no model weights."""
 
 from __future__ import annotations
 
@@ -230,11 +230,70 @@ def detect_velocity(
     return found
 
 
+def detect_ticket_dwell(
+    events: list[Event],
+    *,
+    window: int = 16,
+    z_thresh: float = 2.8,
+    min_samples: int = 8,
+) -> list[Anomaly]:
+    """High-side z-score of (TicketClosed − TicketOpened) in minutes vs prior tickets."""
+    tickets = closed_in_order(project(events))
+    open_by_id = {
+        e.ticket_id: e
+        for e in events
+        if e.type is EventType.TICKET_OPENED
+    }
+    close_by_id = {
+        e.ticket_id: e
+        for e in events
+        if e.type is EventType.TICKET_CLOSED
+    }
+    found: list[Anomaly] = []
+    history: list[float] = []
+    for ticket in tickets:
+        if ticket.closed_at is None:
+            continue
+        dwell_min = (ticket.closed_at - ticket.opened_at).total_seconds() / 60.0
+        baseline = history[-window:]
+        if len(baseline) >= min_samples:
+            z = zscore(dwell_min, baseline)
+            if z is not None and z >= z_thresh:
+                stats = sample_mean_std(baseline)
+                assert stats is not None
+                mean, std = stats
+                opened = open_by_id[ticket.ticket_id]
+                close = close_by_id[ticket.ticket_id]
+                found.append(
+                    Anomaly(
+                        detector="ticket_dwell",
+                        score=z,
+                        at=ticket.closed_at,
+                        summary=(
+                            f"{ticket.ticket_id} {dwell_min:.0f}min on bay {ticket.bay or '?'} "
+                            f"vs baseline {mean:.0f}min (σ={std:.1f})"
+                        ),
+                        event_ids=(opened.event_id, close.event_id),
+                        ticket_id=ticket.ticket_id,
+                        details={
+                            "dwell_minutes": dwell_min,
+                            "baseline_mean_minutes": mean,
+                            "baseline_std_minutes": std,
+                            "window": len(baseline),
+                            "bay": ticket.bay,
+                        },
+                    )
+                )
+        history.append(dwell_min)
+    return found
+
+
 def detect(events: list[Event]) -> list[Anomaly]:
     anomalies = [
         *detect_ticket_totals(events),
         *detect_payment_failures(events),
         *detect_velocity(events),
+        *detect_ticket_dwell(events),
     ]
     anomalies.sort(key=lambda a: (a.at, -a.score, a.detector))
     return anomalies

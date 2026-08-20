@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import math
+from typing import Any
+
 from event_spine.detect import Anomaly, detect, fmt_cents
 from event_spine.events import Event, EventType
 from event_spine.project import Ticket, project
@@ -47,6 +51,26 @@ def render_detect(events: list[Event], anomalies: list[Anomaly] | None = None) -
         if i != len(anomalies):
             lines.append("")
     return "\n".join(lines) + "\n"
+
+
+def render_detect_json(anomalies: list[Anomaly]) -> str:
+    """JSON array of anomalies. Human stdout stays the default elsewhere."""
+
+    def row(a: Anomaly) -> dict[str, Any]:
+        score: float | str = a.score
+        if not math.isfinite(a.score):
+            score = "Infinity" if a.score > 0 else "-Infinity"
+        return {
+            "detector": a.detector,
+            "score": score,
+            "at": a.at.isoformat(),
+            "summary": a.summary,
+            "event_ids": list(a.event_ids),
+            "ticket_id": a.ticket_id,
+            "details": a.details,
+        }
+
+    return json.dumps([row(a) for a in anomalies], indent=2) + "\n"
 
 
 def render_replay(tickets: dict[str, Ticket], *, limit: int | None = None) -> str:

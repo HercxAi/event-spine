@@ -57,6 +57,7 @@ class SimulateTests(unittest.TestCase):
         self.assertIn("ticket_total", names)
         self.assertIn("payment_failure", names)
         self.assertIn("velocity", names)
+        self.assertIn("ticket_dwell", names)
         for anomaly in anomalies:
             self.assertGreater(len(anomaly.event_ids), 0)
             self.assertGreaterEqual(anomaly.score, 2.5)

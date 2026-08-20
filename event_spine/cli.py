@@ -10,7 +10,7 @@ from event_spine import __version__
 from event_spine.detect import detect
 from event_spine.events import Event, EventType
 from event_spine.project import project
-from event_spine.report import render_detect, render_replay
+from event_spine.report import render_detect, render_detect_json, render_replay
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
 
@@ -31,6 +31,12 @@ def main(argv: list[str] | None = None) -> int:
 
     det = sub.add_parser("detect", help="run detectors on a jsonl log")
     det.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    det.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print anomalies as a JSON array",
+    )
 
     rep = sub.add_parser("replay", help="fold events into tickets and print them")
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
@@ -40,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "simulate":
         return _simulate(args.out, args.seed)
     if args.cmd == "detect":
-        return _detect(args.store)
+        return _detect(args.store, args.as_json)
     if args.cmd == "replay":
         return _replay(args.store, args.limit)
     return 2
@@ -70,11 +76,15 @@ def _load(path: Path) -> list[Event]:
     return JsonlEventStore(path).load()
 
 
-def _detect(path: Path) -> int:
+def _detect(path: Path, as_json: bool = False) -> int:
     events = _load(path)
     if not events:
         return 2
-    print(render_detect(events, detect(events)), end="")
+    anomalies = detect(events)
+    if as_json:
+        print(render_detect_json(anomalies), end="")
+    else:
+        print(render_detect(events, anomalies), end="")
     return 0
 
 

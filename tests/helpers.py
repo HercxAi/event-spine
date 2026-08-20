@@ -33,6 +33,7 @@ def ticket_flow(
     prefix: str,
     fail: bool = False,
     items: list[tuple[str, int]] | None = None,
+    dwell: timedelta | None = None,
 ) -> list[Event]:
     """Minimal open → line(s) → pay → close chain."""
     rows = items or [("OIL-CONV", total_cents)]
@@ -86,7 +87,10 @@ def ticket_flow(
             amount_cents=running,
         )
     )
-    t = t + timedelta(seconds=5)
+    if dwell is not None:
+        t = opened + dwell
+    else:
+        t = t + timedelta(seconds=5)
     out.append(
         ev(nid(), EventType.TICKET_CLOSED, t, ticket_id, total_cents=running)
     )

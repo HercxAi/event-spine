@@ -1,4 +1,4 @@
-"""Seeded day at Splitrock Lube. Three planted irregularities, then normal noise."""
+"""Seeded day at Splitrock Lube. Four planted irregularities, then normal noise."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ class _Ids:
 
 
 def simulate_day(config: SimConfig | None = None) -> list[Event]:
-    """One shop day. Same seed → same events, including the three plants."""
+    """One shop day. Same seed → same events, including the four plants."""
     cfg = config or SimConfig()
     rng = random.Random(cfg.seed)
     ids = _Ids()
@@ -90,15 +90,18 @@ def simulate_day(config: SimConfig | None = None) -> list[Event]:
     fleet_at = clock.replace(hour=11, minute=30, second=0)
     whale_at = clock.replace(hour=14, minute=18, second=0)
     outage_at = clock.replace(hour=16, minute=3, second=0)
+    dwell_at = clock.replace(hour=9, minute=42, second=0)
 
     arrivals = _arrivals(rng, clock, close, cfg.mean_gap_s)
     arrivals.extend(fleet_at + timedelta(seconds=12 * i) for i in range(8))
     arrivals.extend(outage_at + timedelta(seconds=50 * i) for i in range(6))
     arrivals.append(whale_at)
+    arrivals.append(dwell_at)
     arrivals.sort()
 
     outage_end = outage_at + timedelta(minutes=7)
     whale_used = False
+    dwell_used = False
 
     for arrival in arrivals:
         if arrival >= close:
@@ -106,6 +109,9 @@ def simulate_day(config: SimConfig | None = None) -> list[Event]:
         is_whale = arrival == whale_at and not whale_used
         if is_whale:
             whale_used = True
+        is_dwell = arrival == dwell_at and not dwell_used
+        if is_dwell:
+            dwell_used = True
         in_outage = outage_at <= arrival <= outage_end
         ticket_events, clock_end = _one_ticket(
             rng,
@@ -113,6 +119,7 @@ def simulate_day(config: SimConfig | None = None) -> list[Event]:
             start=arrival,
             whale=is_whale,
             force_fail=in_outage,
+            long_dwell=is_dwell,
         )
         events.extend(ticket_events)
         if clock_end > close + timedelta(minutes=40):
@@ -161,6 +168,7 @@ def _one_ticket(
     start: datetime,
     whale: bool,
     force_fail: bool,
+    long_dwell: bool = False,
 ) -> tuple[list[Event], datetime]:
     ticket_id = ids.ticket()
     t = start
@@ -198,6 +206,10 @@ def _one_ticket(
 
     total = sum(unit for _, _, unit in items)
     method = "cash" if rng.random() < 0.12 else "card"
+
+    # Bay sits on one car for hours. Close is still a fact; the gap is the tell.
+    if long_dwell:
+        t = t + timedelta(hours=3, minutes=7)
 
     # Organic decline ~2.5% on cards. Outage: fail once or twice, then usually capture.
     attempts = 0

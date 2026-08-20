@@ -1,7 +1,7 @@
 # event-spine
 
 A day's worth of a fictional quick-lube shop, stored as events, then
-watched by three detectors that use actual statistics.
+watched by four detectors that use actual statistics.
 
 Inspired by production event-sourced POS/analytics work. This is not
 that system. It is a small, honest demo of the same shape: append-only
@@ -42,6 +42,7 @@ Python 3.11+. Stdlib only.
 ```bash
 python -m event_spine simulate
 python -m event_spine detect
+python -m event_spine detect --json
 python -m event_spine replay --limit 5
 ```
 
@@ -50,13 +51,14 @@ python -m unittest discover -s tests
 ```
 
 `simulate` is seeded (default 42). Same seed, same day. The generator
-plants three irregularities — a fleet dump at 11:30, a whale ticket
-around 14:18, a card-terminal sulk at 16:03 — and the detectors have
-to find them from the log alone.
+plants four irregularities — a bay that sits on one car for three hours
+from 09:42, a fleet dump at 11:30, a whale ticket around 14:18, a
+card-terminal sulk at 16:03 — and the detectors have to find them from
+the log alone.
 
 ## Detectors
 
-No model weights. Three checks with named math:
+No model weights. Four checks with named math:
 
 1. **Ticket total z-score.** After each close, compare the ticket's
    line-item sum to the previous N tickets. Sample standard deviation
@@ -73,8 +75,17 @@ No model weights. Three checks with named math:
    quiet shop looks busy. Catches a fleet that dumps eight cars on
    the lot at once.
 
+4. **Ticket dwell time.** After each close, the minutes between
+   `TicketOpened` and `TicketClosed` versus the previous N closed
+   tickets. Same sample z-score, high side only. Catches a bay that
+   sits on one car for hours.
+
 Each anomaly prints the score, the window or ticket, and the event ids
-that justify it.
+that justify it. `detect --json` emits the same list as a JSON array.
+
+## 2026-08-20
+
+Ticket dwell-time detector, and JSON output on `detect --json`.
 
 ## Layout
 
@@ -83,7 +94,7 @@ event_spine/events.py     fact types + jsonl codec
 event_spine/store.py      append-only store
 event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
-event_spine/detect.py     the three checks
+event_spine/detect.py     the four checks
 event_spine/report.py     stdout
 event_spine/cli.py        simulate | detect | replay
 ```

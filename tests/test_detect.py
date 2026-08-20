@@ -7,6 +7,7 @@ from datetime import timedelta
 from event_spine.detect import (
     detect,
     detect_payment_failures,
+    detect_ticket_dwell,
     detect_ticket_totals,
     detect_velocity,
     proportion_z,
@@ -163,3 +164,56 @@ class VelocityDetectorTests(unittest.TestCase):
     def test_empty_day_is_quiet(self) -> None:
         self.assertEqual(detect([]), [])
         self.assertEqual(detect_velocity([ev("e", EventType.TICKET_OPENED, at(8), "t")]), [])
+
+
+class DwellDetectorTests(unittest.TestCase):
+    def test_flags_bay_sitting_for_hours(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(12):
+            events.extend(
+                ticket_flow(f"t_{i:02d}", t, 7000 + i * 50, prefix=f"n{i:02d}")
+            )
+            t += timedelta(minutes=12)
+        events.extend(
+            ticket_flow(
+                "t_stuck",
+                t,
+                7000,
+                prefix="d",
+                dwell=timedelta(hours=3, minutes=10),
+            )
+        )
+        hits = detect_ticket_dwell(events, window=16, min_samples=8, z_thresh=2.8)
+        self.assertTrue(any(a.ticket_id == "t_stuck" for a in hits))
+        stuck = next(a for a in hits if a.ticket_id == "t_stuck")
+        self.assertGreaterEqual(stuck.score, 2.8)
+        self.assertGreaterEqual(stuck.details["dwell_minutes"], 180)
+        self.assertEqual(len(stuck.event_ids), 2)
+
+    def test_warmup_does_not_flag_first_long_ticket(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        events.extend(
+            ticket_flow(
+                "t_long",
+                t,
+                7000,
+                prefix="b",
+                dwell=timedelta(hours=4),
+            )
+        )
+        t += timedelta(minutes=10)
+        for i in range(6):
+            events.extend(ticket_flow(f"t_{i}", t, 7000, prefix=f"n{i}"))
+            t += timedelta(minutes=10)
+        hits = detect_ticket_dwell(events, min_samples=8)
+        self.assertEqual(hits, [])
+
+    def test_normal_oil_changes_are_quiet(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(16):
+            events.extend(ticket_flow(f"t_{i:02d}", t, 7000, prefix=f"n{i:02d}"))
+            t += timedelta(minutes=12)
+        self.assertEqual(detect_ticket_dwell(events), [])
