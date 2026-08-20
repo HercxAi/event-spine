@@ -36,11 +36,30 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("t_001", out.getvalue())
 
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["stats", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("tickets", text)
+            self.assertIn("fail rate", text)
+            self.assertIn("p50", text)
+            self.assertIn("p95", text)
+            self.assertIn("ticket_dwell", text)
+            self.assertIn("detector hits", text)
+
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
             with patch("sys.stderr", new=StringIO()) as err:
                 code = main(["detect", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_stats_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["stats", "--store", str(missing)])
             self.assertEqual(code, 2)
             self.assertIn("no event log", err.getvalue())
 

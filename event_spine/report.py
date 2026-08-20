@@ -10,6 +10,7 @@ from event_spine.detect import Anomaly, detect, fmt_cents
 from event_spine.events import Event, EventType
 from event_spine.project import Ticket, project
 from event_spine.simulate import SHOP
+from event_spine.stats import DayStats, summarize
 
 
 def render_detect(events: list[Event], anomalies: list[Anomaly] | None = None) -> str:
@@ -50,6 +51,33 @@ def render_detect(events: list[Event], anomalies: list[Anomaly] | None = None) -
         lines.append(f"   events: {', '.join(shown)}{extra}")
         if i != len(anomalies):
             lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def render_stats(events: list[Event], stats: DayStats | None = None) -> str:
+    """One-screen summary: volume, fail rate, dwell percentiles, detector hits."""
+    if stats is None:
+        stats = summarize(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    if stats.dwell_p50_min is None or stats.dwell_p95_min is None:
+        dwell = "dwell  —"
+    else:
+        dwell = (
+            f"dwell p50 {stats.dwell_p50_min:.1f}min  "
+            f"p95 {stats.dwell_p95_min:.1f}min"
+        )
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {stats.events} events  ·  {stats.tickets} tickets",
+        (
+            f"{stats.closed} closed  ·  "
+            f"fail rate {stats.fail_rate:.1%} ({stats.failures}/{stats.payments})  ·  "
+            f"{dwell}"
+        ),
+        "",
+        "detector hits",
+    ]
+    for name, count in stats.detector_hits:
+        lines.append(f"  {name:<18} {count}")
     return "\n".join(lines) + "\n"
 
 

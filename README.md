@@ -43,6 +43,7 @@ Python 3.11+. Stdlib only.
 python -m event_spine simulate
 python -m event_spine detect
 python -m event_spine detect --json
+python -m event_spine stats
 python -m event_spine replay --limit 5
 ```
 
@@ -83,9 +84,13 @@ No model weights. Four checks with named math:
 Each anomaly prints the score, the window or ticket, and the event ids
 that justify it. `detect --json` emits the same list as a JSON array.
 
+`stats` folds the same log into a one-screen summary: ticket count,
+payment-failure rate, p50/p95 dwell (linear interpolation, Hyndman-Fan
+type 7), and how many times each detector fired.
+
 ## 2026-08-20
 
-Ticket dwell-time detector, and JSON output on `detect --json`.
+`stats` command: ticket count, fail rate, dwell percentiles, detector hits.
 
 ## Layout
 
@@ -95,8 +100,9 @@ event_spine/store.py      append-only store
 event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
 event_spine/detect.py     the four checks
+event_spine/stats.py      day summary + percentiles
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | replay
+event_spine/cli.py        simulate | detect | stats | replay
 ```
 
 ## License
