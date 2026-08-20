@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "event-spine"
+version = "0.1.0"
+description = "Event-sourced POS log + statistical anomaly detectors"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Jeff Olfert", email = "jeff@olfert.me" }]
+keywords = ["event-sourcing", "pos", "anomaly-detection"]
+
+[project.urls]
+Homepage = "https://github.com/jeffolfert/event-spine"
+
+[project.scripts]
+event-spine = "event_spine.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["event_spine*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
