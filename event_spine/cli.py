@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, or replay tickets off the log."""
+"""simulate a day, detect anomalies, replay tickets, or recap the log."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from event_spine import __version__
 from event_spine.detect import detect
 from event_spine.events import Event, EventType
 from event_spine.project import project
-from event_spine.report import render_detect, render_detect_json, render_replay
+from event_spine.report import render_detect, render_detect_json, render_replay, render_summary
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
 
@@ -42,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
     rep.add_argument("--limit", type=int, default=None)
 
+    recap = sub.add_parser("summary", help="one-page recap of the day from the log")
+    recap.add_argument("--store", type=Path, default=DEFAULT_STORE)
+
     args = parser.parse_args(argv)
     if args.cmd == "simulate":
         return _simulate(args.out, args.seed)
@@ -49,6 +52,8 @@ def main(argv: list[str] | None = None) -> int:
         return _detect(args.store, args.as_json)
     if args.cmd == "replay":
         return _replay(args.store, args.limit)
+    if args.cmd == "summary":
+        return _summary(args.store)
     return 2
 
 
@@ -93,4 +98,12 @@ def _replay(path: Path, limit: int | None) -> int:
     if not events:
         return 2
     print(render_replay(project(events), limit=limit), end="")
+    return 0
+
+
+def _summary(path: Path) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    print(render_summary(events), end="")
     return 0

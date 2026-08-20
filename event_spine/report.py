@@ -73,6 +73,52 @@ def render_detect_json(anomalies: list[Anomaly]) -> str:
     return json.dumps([row(a) for a in anomalies], indent=2) + "\n"
 
 
+_DETECTOR_ORDER = (
+    "ticket_total",
+    "payment_failure",
+    "velocity",
+    "ticket_dwell",
+)
+
+
+def render_summary(events: list[Event], anomalies: list[Anomaly] | None = None) -> str:
+    """One-page recap: tickets, revenue, payments, anomalies grouped by detector."""
+    if anomalies is None:
+        anomalies = detect(events)
+    tickets = project(events)
+    closed = [t for t in tickets.values() if t.closed]
+    revenue = sum(t.total_cents for t in closed)
+    captured = sum(1 for e in events if e.type is EventType.PAYMENT_CAPTURED)
+    failed = sum(1 for e in events if e.type is EventType.PAYMENT_FAILED)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+
+    lines = [
+        f"{SHOP}  ·  {day}",
+        "",
+        f"tickets   {len(tickets)}",
+        f"revenue   {fmt_cents(revenue)}",
+        f"payments  {captured} captured / {failed} failed",
+        "",
+    ]
+    if not anomalies:
+        lines.append("no anomalies")
+        return "\n".join(lines) + "\n"
+
+    grouped: dict[str, list[Anomaly]] = {}
+    for anomaly in anomalies:
+        grouped.setdefault(anomaly.detector, []).append(anomaly)
+
+    names = [name for name in _DETECTOR_ORDER if name in grouped]
+    names.extend(name for name in grouped if name not in _DETECTOR_ORDER)
+
+    lines.append("anomalies")
+    for name in names:
+        lines.append(f"  {name}")
+        for anomaly in grouped[name]:
+            lines.append(f"    {anomaly.summary}")
+    return "\n".join(lines) + "\n"
+
+
 def render_replay(tickets: dict[str, Ticket], *, limit: int | None = None) -> str:
     ordered = sorted(tickets.values(), key=lambda t: (t.opened_at, t.ticket_id))
     if limit is not None:

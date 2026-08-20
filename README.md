@@ -44,6 +44,7 @@ python -m event_spine simulate
 python -m event_spine detect
 python -m event_spine detect --json
 python -m event_spine replay --limit 5
+python -m event_spine summary
 ```
 
 ```bash
@@ -83,6 +84,13 @@ No model weights. Four checks with named math:
 Each anomaly prints the score, the window or ticket, and the event ids
 that justify it. `detect --json` emits the same list as a JSON array.
 
+## Today
+
+`summary` reads the same log and detectors as `detect`, then prints one
+page: ticket count, revenue in dollars (from integer cents), captured
+vs failed payments, and the anomalies grouped by detector. It does not
+invent stats. Run `simulate` first if there is no log yet.
+
 ## 2026-08-20
 
 Ticket dwell-time detector, and JSON output on `detect --json`.
@@ -96,7 +104,7 @@ event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
 event_spine/detect.py     the four checks
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | replay
+event_spine/cli.py        simulate | detect | replay | summary
 ```
 
 ## License
