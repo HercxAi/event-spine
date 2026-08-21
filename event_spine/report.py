@@ -6,6 +6,7 @@ import json
 import math
 from typing import Any
 
+from event_spine.brief import DayBrief, from_log
 from event_spine.detect import Anomaly, detect, fmt_cents
 from event_spine.events import Event, EventType
 from event_spine.project import Ticket, project
@@ -78,6 +79,39 @@ def render_stats(events: list[Event], stats: DayStats | None = None) -> str:
         "detector hits",
     ]
     for name, count in stats.detector_hits:
+        lines.append(f"  {name:<24} {count}")
+    return "\n".join(lines) + "\n"
+
+
+def render_brief(events: list[Event], brief: DayBrief | None = None) -> str:
+    """One-page daily ops view rebuilt from the log."""
+    if brief is None:
+        brief = from_log(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {brief.events} events  ·  daily brief",
+        (
+            f"opened {brief.tickets_opened}  ·  "
+            f"closed {brief.tickets_closed}  ·  "
+            f"leftover open {len(brief.leftover)}"
+        ),
+        (
+            f"captured {brief.payments_captured}  ·  "
+            f"failed {brief.payments_failed}  ·  "
+            f"revenue {fmt_cents(brief.revenue_cents)}"
+        ),
+    ]
+    if brief.leftover:
+        lines.append("")
+        for ticket in brief.leftover:
+            paid = "paid" if ticket.paid else "unpaid"
+            lines.append(
+                f"  {ticket.ticket_id}  {ticket.opened_at.strftime('%H:%M')}  "
+                f"bay {ticket.bay or '?'}  {fmt_cents(ticket.total_cents)}  {paid}"
+            )
+    lines.append("")
+    lines.append("detector hits")
+    for name, count in brief.detector_hits:
         lines.append(f"  {name:<24} {count}")
     return "\n".join(lines) + "\n"
 

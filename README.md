@@ -44,6 +44,7 @@ python -m event_spine simulate
 python -m event_spine detect
 python -m event_spine detect --json
 python -m event_spine stats
+python -m event_spine brief
 python -m event_spine replay --limit 5
 ```
 
@@ -107,6 +108,11 @@ that justify it. `detect --json` emits the same list as a JSON array.
 payment-failure rate, p50/p95 dwell (linear interpolation, Hyndman-Fan
 type 7), and how many times each detector fired.
 
+`brief` folds the same log into a one-page daily ops view: tickets
+opened and closed, payments captured vs failed, revenue from captured
+`amount_cents` (integer cents, printed as dollars), leftover still-open
+tickets at the end of the log, and the same detector hit counts.
+
 ## 2026-08-20
 
 `stats` command: ticket count, fail rate, dwell percentiles, detector hits.
@@ -121,6 +127,11 @@ proportion-z burst; this one is a sequential change-point.
 
 Dwell detector also scores tickets that never closed, as of the last event.
 
+`brief` rebuilds a one-page daily ops view from the append-only JSONL —
+opens and closes, captured vs failed payments, captured revenue,
+leftover still-open tickets, and detector hit counts. Run
+`python -m event_spine brief`.
+
 ## Layout
 
 ```
@@ -130,8 +141,9 @@ event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
 event_spine/detect.py     the six checks
 event_spine/stats.py      day summary + percentiles
+event_spine/brief.py      daily ops brief from the log
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | replay
+event_spine/cli.py        simulate | detect | stats | brief | replay
 ```
 
 ## License

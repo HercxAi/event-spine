@@ -52,6 +52,23 @@ class CliTests(unittest.TestCase):
             self.assertIn("payment_failure_cusum", text)
             self.assertIn("detector hits", text)
 
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["brief", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("daily brief", text)
+            self.assertIn("opened", text)
+            self.assertIn("closed", text)
+            self.assertIn("leftover open", text)
+            self.assertIn("captured", text)
+            self.assertIn("failed", text)
+            self.assertIn("revenue $", text)
+            self.assertIn("detector hits", text)
+            self.assertIn("payment_failure_cusum", text)
+            self.assertIn("ticket_dwell", text)
+
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
@@ -67,6 +84,28 @@ class CliTests(unittest.TestCase):
                 code = main(["stats", "--store", str(missing)])
             self.assertEqual(code, 2)
             self.assertIn("no event log", err.getvalue())
+
+    def test_brief_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["brief", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_brief_empty_store_prints_empty_brief(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "empty.jsonl"
+            path.write_text("", encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["brief", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("daily brief", text)
+            self.assertIn("opened 0", text)
+            self.assertIn("leftover open 0", text)
+            self.assertIn("revenue $0.00", text)
+            self.assertIn("detector hits", text)
 
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:
