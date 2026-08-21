@@ -57,6 +57,7 @@ class SimulateTests(unittest.TestCase):
         self.assertIn("ticket_total", names)
         self.assertIn("payment_failure", names)
         self.assertIn("payment_failure_cusum", names)
+        self.assertIn("payment_failure_ewma", names)
         self.assertIn("velocity", names)
         self.assertIn("ticket_dwell", names)
         self.assertIn("concurrent_open", names)

@@ -45,7 +45,12 @@ def render_detect(events: list[Event], anomalies: list[Anomaly] | None = None) -
     lines.append("")
     for i, a in enumerate(anomalies, start=1):
         score = "inf" if a.score == float("inf") else f"{a.score:.2f}"
-        label = "S" if a.detector == "payment_failure_cusum" else "z"
+        if a.detector == "payment_failure_cusum":
+            label = "S"
+        elif a.detector == "payment_failure_ewma":
+            label = "Z"
+        else:
+            label = "z"
         lines.append(f"{i}. {a.detector}  {label}={score}")
         lines.append(f"   {a.summary}")
         shown = a.event_ids[:8]
