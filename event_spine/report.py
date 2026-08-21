@@ -49,6 +49,8 @@ def render_detect(events: list[Event], anomalies: list[Anomaly] | None = None) -
             label = "S"
         elif a.detector == "payment_failure_ewma":
             label = "Z"
+        elif a.detector == "ticket_total_mad":
+            label = "M"
         else:
             label = "z"
         lines.append(f"{i}. {a.detector}  {label}={score}")

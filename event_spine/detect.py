@@ -1,4 +1,4 @@
-"""Seven statistical detectors. Named math, no model weights."""
+"""Eight statistical detectors. Named math, no model weights."""
 
 from __future__ import annotations
 
@@ -42,6 +42,46 @@ def zscore(value: float, baseline: Sequence[float]) -> float | None:
     if std == 0.0:
         return 0.0 if value == mean else math.inf
     return (value - mean) / std
+
+
+# Φ^{-1}(0.75). MAD / 0.6745 estimates σ for Gaussian data.
+MAD_CONSISTENCY = 0.6745
+
+
+def median(values: Sequence[float]) -> float | None:
+    """Sample median. Even n: average of the two central order stats."""
+    n = len(values)
+    if n == 0:
+        return None
+    ordered = sorted(values)
+    mid = n // 2
+    if n % 2:
+        return float(ordered[mid])
+    return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def mad(values: Sequence[float]) -> float | None:
+    """Median absolute deviation from the sample median. None if empty."""
+    med = median(values)
+    if med is None:
+        return None
+    return median([abs(x - med) for x in values])
+
+
+def modified_zscore(value: float, baseline: Sequence[float]) -> float | None:
+    """Iglewicz-Hoaglin modified z: 0.6745 (x − median) / MAD.
+
+    None if n < 2. Zero MAD: 0 if x == median, else +inf.
+    """
+    if len(baseline) < 2:
+        return None
+    med = median(baseline)
+    spread = mad(baseline)
+    if med is None or spread is None:
+        return None
+    if spread == 0.0:
+        return 0.0 if value == med else math.inf
+    return MAD_CONSISTENCY * (value - med) / spread
 
 
 def proportion_z(successes: int, n: int, p0: float) -> float | None:
@@ -183,6 +223,61 @@ def detect_ticket_totals(
                             "total_cents": ticket.total_cents,
                             "baseline_mean_cents": mean,
                             "baseline_std_cents": std,
+                            "window": len(baseline),
+                        },
+                    )
+                )
+        history.append(total)
+    return found
+
+
+def detect_ticket_totals_mad(
+    events: list[Event],
+    *,
+    window: int = 16,
+    z_thresh: float = 3.5,
+    min_samples: int = 8,
+) -> list[Anomaly]:
+    """High-side Iglewicz-Hoaglin modified z-score of a closed ticket total.
+
+    M = 0.6745 (x − median) / MAD versus the previous N tickets.
+    Sample σ is pulled by a prior whale (masking); the MAD is not.
+    Threshold 3.5 is the published cutoff.
+    """
+    tickets = closed_in_order(project(events))
+    close_by_id = {
+        e.ticket_id: e
+        for e in events
+        if e.type is EventType.TICKET_CLOSED
+    }
+    found: list[Anomaly] = []
+    history: list[float] = []
+    for ticket in tickets:
+        total = float(ticket.total_cents)
+        baseline = history[-window:]
+        if len(baseline) >= min_samples:
+            z = modified_zscore(total, baseline)
+            if z is not None and z >= z_thresh:
+                med = median(baseline)
+                spread = mad(baseline)
+                assert med is not None and spread is not None
+                close = close_by_id[ticket.ticket_id]
+                found.append(
+                    Anomaly(
+                        detector="ticket_total_mad",
+                        score=z,
+                        at=ticket.closed_at or ticket.opened_at,
+                        summary=(
+                            f"{ticket.ticket_id} {fmt_cents(ticket.total_cents)} "
+                            f"vs median {fmt_cents(int(round(med)))} "
+                            f"(MAD={fmt_cents(int(round(spread)))})"
+                        ),
+                        event_ids=(close.event_id,),
+                        ticket_id=ticket.ticket_id,
+                        details={
+                            "total_cents": ticket.total_cents,
+                            "baseline_median_cents": med,
+                            "baseline_mad_cents": spread,
                             "window": len(baseline),
                         },
                     )
@@ -631,6 +726,7 @@ def detect_concurrent_open(
 def detect(events: list[Event]) -> list[Anomaly]:
     anomalies = [
         *detect_ticket_totals(events),
+        *detect_ticket_totals_mad(events),
         *detect_payment_failures(events),
         *detect_payment_failure_cusum(events),
         *detect_payment_failure_ewma(events),

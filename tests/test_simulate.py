@@ -55,6 +55,7 @@ class SimulateTests(unittest.TestCase):
         anomalies = detect(events)
         names = {a.detector for a in anomalies}
         self.assertIn("ticket_total", names)
+        self.assertIn("ticket_total_mad", names)
         self.assertIn("payment_failure", names)
         self.assertIn("payment_failure_cusum", names)
         self.assertIn("payment_failure_ewma", names)

@@ -5,6 +5,7 @@ import unittest
 from datetime import timedelta
 
 from event_spine.detect import (
+    MAD_CONSISTENCY,
     cusum_highside,
     detect,
     detect_concurrent_open,
@@ -13,9 +14,13 @@ from event_spine.detect import (
     detect_payment_failures,
     detect_ticket_dwell,
     detect_ticket_totals,
+    detect_ticket_totals_mad,
     detect_velocity,
     ewma_highside,
     ewma_ucl,
+    mad,
+    median,
+    modified_zscore,
     proportion_z,
     sample_mean_std,
     tabular_cusum_k,
@@ -49,6 +54,31 @@ class MathTests(unittest.TestCase):
 
     def test_zscore_needs_two_samples(self) -> None:
         self.assertIsNone(zscore(10.0, [10.0]))
+
+    def test_median_odd_and_even(self) -> None:
+        self.assertEqual(median([3.0, 1.0, 2.0]), 2.0)
+        # [9, 10, 10, 11, 11, 12, 12, 13] → (11+11)/2
+        self.assertEqual(median([10.0, 12.0, 11.0, 13.0, 10.0, 12.0, 11.0, 9.0]), 11.0)
+        self.assertIsNone(median([]))
+
+    def test_mad_hand_computed(self) -> None:
+        # median 11; absdevs [1, 1, 0, 2, 1, 1, 0, 2]
+        # sorted [0, 0, 1, 1, 1, 1, 2, 2]; even → (1+1)/2 = 1
+        values = [10.0, 12.0, 11.0, 13.0, 10.0, 12.0, 11.0, 9.0]
+        self.assertEqual(mad(values), 1.0)
+
+    def test_modified_zscore_hand_computed(self) -> None:
+        baseline = [10.0, 12.0, 11.0, 13.0, 10.0, 12.0, 11.0, 9.0]
+        z = modified_zscore(20.0, baseline)
+        assert z is not None
+        self.assertAlmostEqual(z, MAD_CONSISTENCY * (20 - 11) / 1.0)
+
+    def test_modified_zscore_zero_mad(self) -> None:
+        self.assertEqual(modified_zscore(5.0, [5.0, 5.0, 5.0]), 0.0)
+        self.assertEqual(modified_zscore(9.0, [5.0, 5.0, 5.0]), math.inf)
+
+    def test_modified_zscore_needs_two_samples(self) -> None:
+        self.assertIsNone(modified_zscore(10.0, [10.0]))
 
     def test_proportion_z_hand_computed(self) -> None:
         # p0=0.05, n=8, 6 failures → p=0.75
@@ -166,6 +196,80 @@ class TicketTotalDetectorTests(unittest.TestCase):
             t += timedelta(minutes=10)
         hits = detect_ticket_totals(events, min_samples=8)
         self.assertEqual(hits, [])
+
+
+class TicketTotalMadDetectorTests(unittest.TestCase):
+    def test_flags_whale_against_oil_change_baseline(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(12):
+            events.extend(
+                ticket_flow(f"t_{i:02d}", t, 7000 + i * 50, prefix=f"n{i:02d}")
+            )
+            t += timedelta(minutes=12)
+        events.extend(
+            ticket_flow("t_whale", t, 55_000, prefix="w", items=[("TRN-FLUSH", 55_000)])
+        )
+        hits = detect_ticket_totals_mad(events, window=16, min_samples=8, z_thresh=3.5)
+        self.assertTrue(any(a.ticket_id == "t_whale" for a in hits))
+        whale = next(a for a in hits if a.ticket_id == "t_whale")
+        self.assertGreaterEqual(whale.score, 3.5)
+        self.assertEqual(whale.event_ids[0].startswith("w"), True)
+        self.assertEqual(whale.detector, "ticket_total_mad")
+
+    def test_warmup_does_not_flag_first_tickets(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        events.extend(ticket_flow("t_big", t, 80_000, prefix="b"))
+        t += timedelta(minutes=10)
+        for i in range(6):
+            events.extend(ticket_flow(f"t_{i}", t, 7000, prefix=f"n{i}"))
+            t += timedelta(minutes=10)
+        hits = detect_ticket_totals_mad(events, min_samples=8)
+        self.assertEqual(hits, [])
+
+    def test_prior_whale_masks_bessel_not_mad(self) -> None:
+        """A first whale inflates sample σ; Bessel misses the second, MAD does not."""
+        events: list[Event] = []
+        t = at(8)
+        for i in range(8):
+            events.extend(
+                ticket_flow(f"t_{i:02d}", t, 7000 + i * 50, prefix=f"n{i:02d}")
+            )
+            t += timedelta(minutes=12)
+        events.extend(
+            ticket_flow("t_whale1", t, 55_000, prefix="w1", items=[("TRN-FLUSH", 55_000)])
+        )
+        t += timedelta(minutes=12)
+        for i in range(6):
+            events.extend(
+                ticket_flow(f"t_m{i}", t, 7100 + i * 40, prefix=f"m{i:02d}")
+            )
+            t += timedelta(minutes=12)
+        events.extend(
+            ticket_flow("t_whale2", t, 55_000, prefix="w2", items=[("TRN-FLUSH", 55_000)])
+        )
+        bessel = detect_ticket_totals(events, window=8, min_samples=8, z_thresh=2.8)
+        robust = detect_ticket_totals_mad(events, window=8, min_samples=8, z_thresh=3.5)
+        bessel_ids = {a.ticket_id for a in bessel}
+        robust_ids = {a.ticket_id for a in robust}
+        self.assertIn("t_whale1", bessel_ids)
+        self.assertIn("t_whale1", robust_ids)
+        self.assertNotIn("t_whale2", bessel_ids)
+        self.assertIn("t_whale2", robust_ids)
+        second = next(a for a in robust if a.ticket_id == "t_whale2")
+        self.assertGreaterEqual(second.score, 3.5)
+
+    def test_seeded_day_flags_flush_ticket(self) -> None:
+        events = simulate_day(SimConfig(seed=42))
+        hits = detect_ticket_totals_mad(events)
+        self.assertGreaterEqual(len(hits), 1)
+        top = max(hits, key=lambda a: a.score)
+        self.assertGreaterEqual(top.score, 3.5)
+        self.assertGreaterEqual(int(top.details["total_cents"]), 40_000)
+        names = {a.detector for a in detect(events)}
+        self.assertIn("ticket_total", names)
+        self.assertIn("ticket_total_mad", names)
 
 
 class PaymentDetectorTests(unittest.TestCase):

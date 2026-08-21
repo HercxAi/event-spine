@@ -26,6 +26,7 @@ class CliTests(unittest.TestCase):
             text = out.getvalue()
             self.assertEqual(code, 0)
             self.assertIn("ticket_total", text)
+            self.assertIn("ticket_total_mad", text)
             self.assertIn("payment_failure", text)
             self.assertIn("payment_failure_cusum", text)
             self.assertIn("payment_failure_ewma", text)
@@ -52,6 +53,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("concurrent_open", text)
             self.assertIn("payment_failure_cusum", text)
             self.assertIn("payment_failure_ewma", text)
+            self.assertIn("ticket_total_mad", text)
             self.assertIn("detector hits", text)
 
             before = path.read_text(encoding="utf-8")

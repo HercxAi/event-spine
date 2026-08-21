@@ -14,6 +14,7 @@ from event_spine.project import closed_in_order, project
 # Stable print order. Any extra detector name sorts after these.
 DETECTORS = (
     "ticket_total",
+    "ticket_total_mad",
     "payment_failure",
     "payment_failure_cusum",
     "payment_failure_ewma",

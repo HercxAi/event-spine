@@ -111,6 +111,7 @@ class SummarizeTests(unittest.TestCase):
             self.assertEqual(n, sum(1 for a in counted if a.detector == name))
         self.assertGreater(by_name["ticket_dwell"], 0)
         self.assertGreater(by_name["ticket_total"], 0)
+        self.assertGreater(by_name["ticket_total_mad"], 0)
         self.assertGreater(by_name["payment_failure"], 0)
         self.assertGreater(by_name["payment_failure_cusum"], 0)
         self.assertGreater(by_name["payment_failure_ewma"], 0)
