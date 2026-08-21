@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from event_spine.detect import (
     detect,
+    detect_concurrent_open,
     detect_payment_failures,
     detect_ticket_dwell,
     detect_ticket_totals,
@@ -217,3 +218,105 @@ class DwellDetectorTests(unittest.TestCase):
             events.extend(ticket_flow(f"t_{i:02d}", t, 7000, prefix=f"n{i:02d}"))
             t += timedelta(minutes=12)
         self.assertEqual(detect_ticket_dwell(events), [])
+
+
+class ConcurrentOpenDetectorTests(unittest.TestCase):
+    def test_score_matches_hand_computed_series(self) -> None:
+        # Eight sequential open/close pairs → concurrent snapshots [1, 0] * 8.
+        # Then six stacked opens. The 6-open snapshot is judged against the
+        # prior 16 counts: the last 11 quiet values plus the climb 1..5.
+        events: list[Event] = []
+        t = at(8)
+        for i in range(8):
+            events.append(ev(f"q{i}o", EventType.TICKET_OPENED, t, f"t_q{i}"))
+            t += timedelta(minutes=4)
+            events.append(ev(f"q{i}c", EventType.TICKET_CLOSED, t, f"t_q{i}"))
+            t += timedelta(minutes=4)
+        pile = t
+        for i in range(6):
+            events.append(
+                ev(
+                    f"p{i}o",
+                    EventType.TICKET_OPENED,
+                    pile + timedelta(seconds=10 * i),
+                    f"t_p{i}",
+                )
+            )
+        quiet = [1.0, 0.0] * 8
+        baseline = (quiet + [1.0, 2.0, 3.0, 4.0, 5.0])[-16:]
+        expected = zscore(6.0, baseline)
+        assert expected is not None
+
+        hits = detect_concurrent_open(events, window=16, min_samples=8, z_thresh=2.8)
+        self.assertTrue(hits)
+        top = max(hits, key=lambda a: a.score)
+        self.assertEqual(top.detector, "concurrent_open")
+        self.assertEqual(top.details["concurrent"], 6)
+        self.assertAlmostEqual(top.score, expected)
+        self.assertEqual(len(top.event_ids), 6)
+        self.assertTrue(all(eid.startswith("p") for eid in top.event_ids))
+
+    def test_flags_pileup_against_quiet_baseline(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(12):
+            events.extend(ticket_flow(f"t_{i:02d}", t, 7000, prefix=f"n{i:02d}"))
+            t += timedelta(minutes=12)
+        pile = t
+        for i in range(8):
+            events.extend(
+                ticket_flow(
+                    f"t_p{i}",
+                    pile + timedelta(seconds=8 * i),
+                    7000,
+                    prefix=f"p{i}",
+                )
+            )
+        hits = detect_concurrent_open(events, window=16, min_samples=8, z_thresh=2.8)
+        self.assertGreaterEqual(len(hits), 1)
+        top = max(hits, key=lambda a: a.score)
+        self.assertGreaterEqual(top.score, 2.8)
+        self.assertGreaterEqual(int(top.details["concurrent"]), 5)
+        self.assertTrue(any(eid.startswith("p") for eid in top.event_ids))
+
+    def test_warmup_does_not_flag_first_stack(self) -> None:
+        events: list[Event] = [
+            ev(f"p{i}o", EventType.TICKET_OPENED, at(8, 0, i), f"t_p{i}")
+            for i in range(8)
+        ]
+        self.assertEqual(detect_concurrent_open(events, min_samples=8), [])
+
+    def test_sequential_oil_changes_are_quiet(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(16):
+            events.extend(ticket_flow(f"t_{i:02d}", t, 7000, prefix=f"n{i:02d}"))
+            t += timedelta(minutes=12)
+        self.assertEqual(detect_concurrent_open(events), [])
+
+    def test_two_cars_is_not_a_pileup(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(12):
+            events.extend(ticket_flow(f"t_{i:02d}", t, 7000, prefix=f"n{i:02d}"))
+            t += timedelta(minutes=12)
+        overlap = t
+        events.extend(ticket_flow("t_a", overlap, 7000, prefix="a"))
+        events.extend(
+            ticket_flow("t_b", overlap + timedelta(seconds=20), 7000, prefix="b")
+        )
+        self.assertEqual(detect_concurrent_open(events), [])
+
+    def test_detect_includes_concurrent_open(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(10):
+            events.extend(ticket_flow(f"t_{i:02d}", t, 7000, prefix=f"n{i:02d}"))
+            t += timedelta(minutes=12)
+        pile = t
+        for i in range(8):
+            events.append(
+                ev(f"p{i}o", EventType.TICKET_OPENED, pile + timedelta(seconds=i), f"t_p{i}")
+            )
+        names = {a.detector for a in detect(events)}
+        self.assertIn("concurrent_open", names)
