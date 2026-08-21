@@ -31,6 +31,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("velocity", text)
             self.assertIn("ticket_dwell", text)
             self.assertIn("concurrent_open", text)
+            self.assertIn("still open", text)
             self.assertIn("events:", text)
 
             with patch("sys.stdout", new=StringIO()) as out:

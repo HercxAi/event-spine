@@ -63,6 +63,10 @@ class SimulateTests(unittest.TestCase):
         for anomaly in anomalies:
             self.assertGreater(len(anomaly.event_ids), 0)
             self.assertGreaterEqual(anomaly.score, 2.5)
+        open_ids = {tid for tid, t in project(events).items() if not t.closed}
+        self.assertTrue(open_ids)
+        dwell_ids = {a.ticket_id for a in anomalies if a.detector == "ticket_dwell"}
+        self.assertTrue(open_ids & dwell_ids)
 
     def test_type_counts_are_sane(self) -> None:
         counts = Counter(e.type for e in simulate_day(SimConfig(seed=42)))

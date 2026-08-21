@@ -87,8 +87,11 @@ No model weights. Six checks with named math:
 
 5. **Ticket dwell time.** After each close, the minutes between
    `TicketOpened` and `TicketClosed` versus the previous N closed
-   tickets. Same sample z-score, high side only. Catches a bay that
-   sits on one car for hours.
+   tickets. Same sample z-score, high side only. Tickets that never
+   closed are scored the same way against the last timestamp in the
+   log, so a bay that never closed still shows up. Catches a bay that
+   sits on one car for hours — including the unpaid outage ticket
+   still sitting in a bay at close.
 
 6. **Concurrent open tickets.** Walk the log; increment on
    `TicketOpened`, decrement on `TicketClosed`. After each, compare
@@ -115,6 +118,8 @@ rolling sample z-score, high side only.
 High-side tabular CUSUM on the payment stream (Page / Montgomery:
 k = p0 + ½σ, h = 4). Same 16:03 card-terminal plant as the
 proportion-z burst; this one is a sequential change-point.
+
+Dwell detector also scores tickets that never closed, as of the last event.
 
 ## Layout
 

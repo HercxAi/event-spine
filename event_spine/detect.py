@@ -340,9 +340,15 @@ def detect_ticket_dwell(
     window: int = 16,
     z_thresh: float = 2.8,
     min_samples: int = 8,
+    as_of: datetime | None = None,
 ) -> list[Anomaly]:
-    """High-side z-score of (TicketClosed − TicketOpened) in minutes vs prior tickets."""
-    tickets = closed_in_order(project(events))
+    """High-side z-score of ticket dwell in minutes vs prior closed tickets.
+
+    Closed tickets are scored at close. Still-open tickets are scored at
+    as_of (default: last event) so a bay that never closed still flags.
+    """
+    projected = project(events)
+    tickets = closed_in_order(projected)
     open_by_id = {
         e.ticket_id: e
         for e in events
@@ -389,6 +395,52 @@ def detect_ticket_dwell(
                     )
                 )
         history.append(dwell_min)
+
+    now = as_of
+    if now is None and events:
+        now = max(e.occurred_at for e in events)
+    if now is not None:
+        still_open = sorted(
+            (t for t in projected.values() if not t.closed),
+            key=lambda t: (t.opened_at, t.ticket_id),
+        )
+        for ticket in still_open:
+            dwell_min = (now - ticket.opened_at).total_seconds() / 60.0
+            if dwell_min < 0:
+                continue
+            baseline = history[-window:]
+            if len(baseline) < min_samples:
+                continue
+            z = zscore(dwell_min, baseline)
+            if z is None or z < z_thresh:
+                continue
+            stats = sample_mean_std(baseline)
+            assert stats is not None
+            mean, std = stats
+            opened = open_by_id[ticket.ticket_id]
+            found.append(
+                Anomaly(
+                    detector="ticket_dwell",
+                    score=z,
+                    at=now,
+                    summary=(
+                        f"{ticket.ticket_id} still open {dwell_min:.0f}min "
+                        f"on bay {ticket.bay or '?'} "
+                        f"vs baseline {mean:.0f}min (σ={std:.1f})"
+                    ),
+                    event_ids=(opened.event_id,),
+                    ticket_id=ticket.ticket_id,
+                    details={
+                        "dwell_minutes": dwell_min,
+                        "baseline_mean_minutes": mean,
+                        "baseline_std_minutes": std,
+                        "window": len(baseline),
+                        "bay": ticket.bay,
+                        "open": True,
+                        "as_of": now.isoformat(),
+                    },
+                )
+            )
     return found
 
 

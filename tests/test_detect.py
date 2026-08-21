@@ -363,6 +363,94 @@ class DwellDetectorTests(unittest.TestCase):
             t += timedelta(minutes=12)
         self.assertEqual(detect_ticket_dwell(events), [])
 
+    def test_flags_ticket_still_open_for_hours(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(12):
+            events.extend(
+                ticket_flow(
+                    f"t_{i:02d}",
+                    t,
+                    7000,
+                    prefix=f"n{i:02d}",
+                    dwell=timedelta(minutes=7 + (i % 3)),
+                )
+            )
+            t += timedelta(minutes=12)
+        opened = at(10, 30)
+        events.append(
+            ev("o01", EventType.TICKET_OPENED, opened, "t_open", bay="2", vehicle="x")
+        )
+        # A later close gives the log a "now" well after the stall started.
+        events.extend(
+            ticket_flow(
+                "t_later",
+                at(13, 40),
+                7000,
+                prefix="z",
+                dwell=timedelta(minutes=8),
+            )
+        )
+        hits = detect_ticket_dwell(events, window=16, min_samples=8, z_thresh=2.8)
+        self.assertTrue(any(a.ticket_id == "t_open" for a in hits))
+        stuck = next(a for a in hits if a.ticket_id == "t_open")
+        self.assertGreaterEqual(stuck.score, 2.8)
+        self.assertGreaterEqual(stuck.details["dwell_minutes"], 180)
+        self.assertTrue(stuck.details["open"])
+        self.assertEqual(stuck.event_ids, ("o01",))
+        self.assertIn("still open", stuck.summary)
+
+    def test_recently_opened_ticket_is_quiet(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(12):
+            events.extend(
+                ticket_flow(
+                    f"t_{i:02d}",
+                    t,
+                    7000,
+                    prefix=f"n{i:02d}",
+                    dwell=timedelta(minutes=7 + (i % 3)),
+                )
+            )
+            t += timedelta(minutes=12)
+        # Opened a minute after the last arrival — still a normal oil change.
+        events.append(
+            ev(
+                "o01",
+                EventType.TICKET_OPENED,
+                t + timedelta(minutes=1),
+                "t_open",
+                bay="2",
+                vehicle="x",
+            )
+        )
+        events.extend(
+            ticket_flow(
+                "t_last",
+                t,
+                7000,
+                prefix="z",
+                dwell=timedelta(minutes=8),
+            )
+        )
+        hits = detect_ticket_dwell(events)
+        self.assertFalse(any(a.ticket_id == "t_open" for a in hits))
+
+    def test_open_ticket_respects_warmup(self) -> None:
+        events = [
+            ev("o01", EventType.TICKET_OPENED, at(8), "t_open", bay="1", vehicle="x"),
+            *ticket_flow(
+                "t_done",
+                at(11),
+                7000,
+                prefix="c",
+                dwell=timedelta(hours=3),
+            ),
+        ]
+        # Only one closed ticket; not enough baseline to score the open stall.
+        self.assertEqual(detect_ticket_dwell(events, min_samples=8), [])
+
 
 class ConcurrentOpenDetectorTests(unittest.TestCase):
     def test_score_matches_hand_computed_series(self) -> None:
