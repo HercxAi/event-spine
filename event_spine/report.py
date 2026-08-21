@@ -44,7 +44,8 @@ def render_detect(events: list[Event], anomalies: list[Anomaly] | None = None) -
     lines.append("")
     for i, a in enumerate(anomalies, start=1):
         score = "inf" if a.score == float("inf") else f"{a.score:.2f}"
-        lines.append(f"{i}. {a.detector}  z={score}")
+        label = "S" if a.detector == "payment_failure_cusum" else "z"
+        lines.append(f"{i}. {a.detector}  {label}={score}")
         lines.append(f"   {a.summary}")
         shown = a.event_ids[:8]
         extra = f" +{len(a.event_ids) - 8} more" if len(a.event_ids) > 8 else ""
@@ -77,7 +78,7 @@ def render_stats(events: list[Event], stats: DayStats | None = None) -> str:
         "detector hits",
     ]
     for name, count in stats.detector_hits:
-        lines.append(f"  {name:<18} {count}")
+        lines.append(f"  {name:<24} {count}")
     return "\n".join(lines) + "\n"
 
 

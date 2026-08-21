@@ -112,5 +112,6 @@ class SummarizeTests(unittest.TestCase):
         self.assertGreater(by_name["ticket_dwell"], 0)
         self.assertGreater(by_name["ticket_total"], 0)
         self.assertGreater(by_name["payment_failure"], 0)
+        self.assertGreater(by_name["payment_failure_cusum"], 0)
         self.assertGreater(by_name["velocity"], 0)
         self.assertGreater(by_name["concurrent_open"], 0)

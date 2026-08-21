@@ -27,6 +27,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("ticket_total", text)
             self.assertIn("payment_failure", text)
+            self.assertIn("payment_failure_cusum", text)
             self.assertIn("velocity", text)
             self.assertIn("ticket_dwell", text)
             self.assertIn("concurrent_open", text)
@@ -47,6 +48,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("p95", text)
             self.assertIn("ticket_dwell", text)
             self.assertIn("concurrent_open", text)
+            self.assertIn("payment_failure_cusum", text)
             self.assertIn("detector hits", text)
 
     def test_detect_missing_store(self) -> None:
@@ -89,6 +91,7 @@ class CliTests(unittest.TestCase):
             names = {row["detector"] for row in payload}
             self.assertIn("ticket_dwell", names)
             self.assertIn("concurrent_open", names)
+            self.assertIn("payment_failure_cusum", names)
             required = {
                 "detector",
                 "score",

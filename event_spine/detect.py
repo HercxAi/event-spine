@@ -1,4 +1,4 @@
-"""Five statistical detectors. Named math, no model weights."""
+"""Six statistical detectors. Named math, no model weights."""
 
 from __future__ import annotations
 
@@ -53,6 +53,47 @@ def proportion_z(successes: int, n: int, p0: float) -> float | None:
     if se == 0.0:
         return None
     return (p - p0) / se
+
+
+def tabular_cusum_k(p0: float, *, shift: float = 0.5) -> float | None:
+    """Montgomery reference value: k = p0 + shift·σ, σ = √(p0(1−p0))."""
+    if not (0.0 < p0 < 1.0):
+        return None
+    return p0 + shift * math.sqrt(p0 * (1.0 - p0))
+
+
+def cusum_highside(
+    values: Sequence[float],
+    *,
+    k: float,
+    h: float,
+) -> list[tuple[int, int, float]]:
+    """High-side tabular CUSUM (Page 1954 / Montgomery).
+
+    S_t = max(0, S_{t−1} + x_t − k). Alarm when S_t ≥ h.
+    Returns (decision_index, change_index, S) once per excursion:
+    latches until S returns to 0 so a run is one change-point.
+    change_index is the start of the current positive run
+    (last time S was 0, next observation).
+    """
+    if h <= 0:
+        return []
+    found: list[tuple[int, int, float]] = []
+    statistic = 0.0
+    change: int | None = None
+    latched = False
+    for i, value in enumerate(values):
+        statistic = max(0.0, statistic + float(value) - k)
+        if statistic == 0.0:
+            change = None
+            latched = False
+            continue
+        if change is None:
+            change = i
+        if not latched and statistic >= h:
+            found.append((i, change, statistic))
+            latched = True
+    return found
 
 
 def detect_ticket_totals(
@@ -160,6 +201,69 @@ def detect_payment_failures(
             )
         )
     return _peak_windows(raw)
+
+
+def detect_payment_failure_cusum(
+    events: list[Event],
+    *,
+    baseline_until_hour: int = 14,
+    min_baseline: int = 8,
+    prior: float = 0.03,
+    h: float = 4.0,
+    k_shift: float = 0.5,
+) -> list[Anomaly]:
+    """High-side tabular CUSUM on PaymentFailed / PaymentCaptured.
+
+    Morning baseline is payments before 14:00 UTC so the 16:03 plant
+    does not leak into p0. x=1 on fail, x=0 on capture. k = p0 + ½σ
+    (Bernoulli), alarm at h. One anomaly per excursion.
+    """
+    payments = [e for e in events if e.type in PAYMENT_TYPES]
+    if len(payments) < min_baseline:
+        return []
+
+    early = [e for e in payments if e.occurred_at.hour < baseline_until_hour]
+    if len(early) < min_baseline:
+        return []
+    early_fails = sum(1 for e in early if e.type is EventType.PAYMENT_FAILED)
+    p0 = early_fails / len(early)
+    p0 = min(max(p0, prior), 0.5)
+    k = tabular_cusum_k(p0, shift=k_shift)
+    if k is None:
+        return []
+
+    xs = [1.0 if e.type is EventType.PAYMENT_FAILED else 0.0 for e in payments]
+    found: list[Anomaly] = []
+    for decision_i, change_i, statistic in cusum_highside(xs, k=k, h=h):
+        decision = payments[decision_i]
+        change = payments[change_i]
+        run = payments[change_i : decision_i + 1]
+        found.append(
+            Anomaly(
+                detector="payment_failure_cusum",
+                score=statistic,
+                at=decision.occurred_at,
+                summary=(
+                    f"change at {_hhmm(change.occurred_at)}  "
+                    f"S={statistic:.2f} ≥ h={h:g} "
+                    f"(k={k:.3f}, baseline {p0:.1%})"
+                ),
+                event_ids=tuple(e.event_id for e in run),
+                details={
+                    "p0": p0,
+                    "k": k,
+                    "h": h,
+                    "S": statistic,
+                    "change_event_id": change.event_id,
+                    "decision_event_id": decision.event_id,
+                    "change_at": change.occurred_at.isoformat(),
+                    "baseline_until_hour": baseline_until_hour,
+                    "baseline_payments": len(early),
+                    "baseline_failures": early_fails,
+                },
+            )
+        )
+    return found
 
 
 def detect_velocity(
@@ -359,6 +463,7 @@ def detect(events: list[Event]) -> list[Anomaly]:
     anomalies = [
         *detect_ticket_totals(events),
         *detect_payment_failures(events),
+        *detect_payment_failure_cusum(events),
         *detect_velocity(events),
         *detect_ticket_dwell(events),
         *detect_concurrent_open(events),
