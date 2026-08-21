@@ -1,7 +1,7 @@
 # event-spine
 
 A day's worth of a fictional quick-lube shop, stored as events, then
-watched by five detectors that use actual statistics.
+watched by six detectors that use actual statistics.
 
 Inspired by production event-sourced POS/analytics work. This is not
 that system. It is a small, honest demo of the same shape: append-only
@@ -59,7 +59,7 @@ the log alone.
 
 ## Detectors
 
-No model weights. Five checks with named math:
+No model weights. Six checks with named math:
 
 1. **Ticket total z-score.** After each close, compare the ticket's
    line-item sum to the previous N tickets. Sample standard deviation
@@ -71,17 +71,26 @@ No model weights. Five checks with named math:
    against the morning baseline. Overlapping windows collapse to the
    peak. Catches a terminal that starts declining everything at 4pm.
 
-3. **Velocity spike.** `TicketOpened` counts in fixed 5-minute bins,
+3. **Payment-failure CUSUM.** Same payment stream, scored 1 on fail
+   and 0 on capture. Morning Bernoulli mean p0 from payments before
+   14:00 UTC (the 16:03 plant stays out of the baseline). High-side
+   tabular CUSUM (Page 1954 / Montgomery): S_t = max(0, S_{t−1} + x_t − k)
+   with slack k = p0 + ½σ, σ = √(p0(1−p0)), alarm at h = 4. One
+   change-point per excursion, not a hit on every later fail. The
+   proportion-z burst and this CUSUM both fire on the planted outage;
+   one is a windowed rate, the other is a sequential change-point.
+
+4. **Velocity spike.** `TicketOpened` counts in fixed 5-minute bins,
    z-score versus the previous bins. Empty bins count — otherwise a
    quiet shop looks busy. Catches a fleet that dumps eight cars on
    the lot at once.
 
-4. **Ticket dwell time.** After each close, the minutes between
+5. **Ticket dwell time.** After each close, the minutes between
    `TicketOpened` and `TicketClosed` versus the previous N closed
    tickets. Same sample z-score, high side only. Catches a bay that
    sits on one car for hours.
 
-5. **Concurrent open tickets.** Walk the log; increment on
+6. **Concurrent open tickets.** Walk the log; increment on
    `TicketOpened`, decrement on `TicketClosed`. After each, compare
    the live count to the previous N snapshots. Same sample z-score,
    high side only. Overlapping snapshots of the same cars collapse
@@ -101,6 +110,12 @@ type 7), and how many times each detector fired.
 Concurrent open-ticket detector (shop load): running count versus a
 rolling sample z-score, high side only.
 
+## 2026-08-21
+
+High-side tabular CUSUM on the payment stream (Page / Montgomery:
+k = p0 + ½σ, h = 4). Same 16:03 card-terminal plant as the
+proportion-z burst; this one is a sequential change-point.
+
 ## Layout
 
 ```
@@ -108,7 +123,7 @@ event_spine/events.py     fact types + jsonl codec
 event_spine/store.py      append-only store
 event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
-event_spine/detect.py     the five checks
+event_spine/detect.py     the six checks
 event_spine/stats.py      day summary + percentiles
 event_spine/report.py     stdout
 event_spine/cli.py        simulate | detect | stats | replay

@@ -15,6 +15,7 @@ from event_spine.project import closed_in_order, project
 DETECTORS = (
     "ticket_total",
     "payment_failure",
+    "payment_failure_cusum",
     "velocity",
     "ticket_dwell",
     "concurrent_open",

@@ -5,17 +5,21 @@ import unittest
 from datetime import timedelta
 
 from event_spine.detect import (
+    cusum_highside,
     detect,
     detect_concurrent_open,
+    detect_payment_failure_cusum,
     detect_payment_failures,
     detect_ticket_dwell,
     detect_ticket_totals,
     detect_velocity,
     proportion_z,
     sample_mean_std,
+    tabular_cusum_k,
     zscore,
 )
 from event_spine.events import Event, EventType
+from event_spine.simulate import SimConfig, simulate_day
 from tests.helpers import at, ev, ticket_flow
 
 
@@ -54,6 +58,39 @@ class MathTests(unittest.TestCase):
         self.assertIsNone(proportion_z(1, 10, 0.0))
         self.assertIsNone(proportion_z(1, 10, 1.0))
         self.assertIsNone(proportion_z(1, 0, 0.05))
+
+    def test_tabular_cusum_k_hand_computed(self) -> None:
+        # p0=0.03, σ=√(0.03·0.97), k = p0 + ½σ
+        k = tabular_cusum_k(0.03)
+        assert k is not None
+        self.assertAlmostEqual(k, 0.03 + 0.5 * math.sqrt(0.03 * 0.97))
+        self.assertIsNone(tabular_cusum_k(0.0))
+        self.assertIsNone(tabular_cusum_k(1.0))
+
+    def test_cusum_highside_quiet_then_fail_burst(self) -> None:
+        # Ten captures, then six fails. k from morning p0=0.03.
+        k = tabular_cusum_k(0.03)
+        assert k is not None
+        xs = [0.0] * 10 + [1.0] * 6
+        hits = cusum_highside(xs, k=k, h=4.0)
+        self.assertEqual(len(hits), 1)
+        decision_i, change_i, statistic = hits[0]
+        # S grows by (1−k) per fail; first crossing is the 5th fail.
+        self.assertEqual(change_i, 10)
+        self.assertEqual(decision_i, 14)
+        self.assertAlmostEqual(statistic, 5 * (1.0 - k))
+        self.assertGreaterEqual(statistic, 4.0)
+
+    def test_cusum_highside_latches_until_reset(self) -> None:
+        k = tabular_cusum_k(0.03)
+        assert k is not None
+        # One excursion of six fails, then captures that drain S, then another burst.
+        drain = math.ceil(6 * (1.0 - k) / k) + 1
+        xs = [0.0] * 8 + [1.0] * 6 + [0.0] * drain + [1.0] * 6
+        hits = cusum_highside(xs, k=k, h=4.0)
+        self.assertEqual(len(hits), 2)
+        self.assertEqual(hits[0][1], 8)
+        self.assertGreater(hits[1][1], hits[0][0])
 
 
 class TicketTotalDetectorTests(unittest.TestCase):
@@ -126,6 +163,113 @@ class PaymentDetectorTests(unittest.TestCase):
             )
         hits = detect_payment_failures(events, window_s=8 * 60, min_payments=5)
         self.assertEqual(len(hits), 1)
+
+
+class PaymentCusumDetectorTests(unittest.TestCase):
+    def test_flags_afternoon_fail_burst(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(20):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=10)
+        burst = at(16, 3)
+        for i in range(6):
+            events.append(
+                ev(
+                    f"f{i}",
+                    EventType.PAYMENT_FAILED,
+                    burst + timedelta(minutes=i),
+                    f"t_f{i}",
+                )
+            )
+        hits = detect_payment_failure_cusum(events)
+        self.assertEqual(len(hits), 1)
+        hit = hits[0]
+        self.assertEqual(hit.detector, "payment_failure_cusum")
+        self.assertGreaterEqual(hit.score, 4.0)
+        self.assertEqual(hit.details["change_event_id"], "f0")
+        self.assertTrue(hit.details["decision_event_id"].startswith("f"))
+        self.assertIn("f0", hit.event_ids)
+        self.assertEqual(hit.details["baseline_until_hour"], 14)
+        self.assertLess(hit.details["baseline_failures"], 1)
+        k = tabular_cusum_k(0.03)
+        assert k is not None
+        self.assertAlmostEqual(float(hit.details["k"]), k)
+        self.assertAlmostEqual(hit.score, 5 * (1.0 - k))
+
+    def test_one_change_point_not_a_hit_per_fail(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(16):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=12)
+        burst = at(16, 3)
+        for i in range(10):
+            events.append(
+                ev(
+                    f"f{i}",
+                    EventType.PAYMENT_FAILED,
+                    burst + timedelta(seconds=30 * i),
+                    f"t_f{i}",
+                )
+            )
+        hits = detect_payment_failure_cusum(events)
+        self.assertEqual(len(hits), 1)
+
+    def test_isolated_fail_is_quiet(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(16):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=12)
+        events.append(ev("f0", EventType.PAYMENT_FAILED, at(16, 3), "t_f"))
+        self.assertEqual(detect_payment_failure_cusum(events), [])
+
+    def test_baseline_excludes_afternoon_outage(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(12):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=15)
+        # A morning-looking burst after 14:00 must not raise p0.
+        burst = at(16, 3)
+        for i in range(6):
+            events.append(
+                ev(
+                    f"f{i}",
+                    EventType.PAYMENT_FAILED,
+                    burst + timedelta(minutes=i),
+                    f"t_f{i}",
+                )
+            )
+        hit = detect_payment_failure_cusum(events)[0]
+        self.assertEqual(hit.details["baseline_failures"], 0)
+        self.assertAlmostEqual(float(hit.details["p0"]), 0.03)
+
+    def test_seeded_day_flags_1603_outage(self) -> None:
+        events = simulate_day(SimConfig(seed=42))
+        hits = detect_payment_failure_cusum(events)
+        self.assertEqual(len(hits), 1)
+        hit = hits[0]
+        self.assertEqual(hit.detector, "payment_failure_cusum")
+        self.assertGreaterEqual(hit.score, 4.0)
+        self.assertEqual(hit.at.hour, 16)
+        self.assertGreaterEqual(hit.at.minute, 3)
+        self.assertLess(hit.at.minute, 15)
+        change_at = hit.details["change_at"]
+        self.assertTrue(str(change_at).startswith("2026-03-14T16:"))
+        self.assertTrue(hit.event_ids)
+        names = {a.detector for a in detect(events)}
+        self.assertIn("payment_failure", names)
+        self.assertIn("payment_failure_cusum", names)
 
 
 class VelocityDetectorTests(unittest.TestCase):
