@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, or replay tickets."""
+"""simulate a day, detect anomalies, summarize the log, replay tickets, or fold hours."""
 
 from __future__ import annotations
 
@@ -10,7 +10,13 @@ from event_spine import __version__
 from event_spine.detect import detect
 from event_spine.events import Event, EventType
 from event_spine.project import project
-from event_spine.report import render_detect, render_detect_json, render_replay, render_stats
+from event_spine.report import (
+    render_detect,
+    render_detect_json,
+    render_hours,
+    render_replay,
+    render_stats,
+)
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
 
@@ -41,6 +47,9 @@ def main(argv: list[str] | None = None) -> int:
     st = sub.add_parser("stats", help="ticket count, fail rate, dwell percentiles, detector hits")
     st.add_argument("--store", type=Path, default=DEFAULT_STORE)
 
+    hrs = sub.add_parser("hours", help="hourly tickets, payments, and revenue from the log")
+    hrs.add_argument("--store", type=Path, default=DEFAULT_STORE)
+
     rep = sub.add_parser("replay", help="fold events into tickets and print them")
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
     rep.add_argument("--limit", type=int, default=None)
@@ -52,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
         return _detect(args.store, args.as_json)
     if args.cmd == "stats":
         return _stats(args.store)
+    if args.cmd == "hours":
+        return _hours(args.store)
     if args.cmd == "replay":
         return _replay(args.store, args.limit)
     return 2
@@ -98,6 +109,14 @@ def _stats(path: Path) -> int:
     if not events:
         return 2
     print(render_stats(events), end="")
+    return 0
+
+
+def _hours(path: Path) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    print(render_hours(events), end="")
     return 0
 
 

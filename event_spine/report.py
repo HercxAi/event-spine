@@ -8,6 +8,7 @@ from typing import Any
 
 from event_spine.detect import Anomaly, detect, fmt_cents
 from event_spine.events import Event, EventType
+from event_spine.hours import HourBin, by_hour
 from event_spine.project import Ticket, project
 from event_spine.simulate import SHOP
 from event_spine.stats import DayStats, summarize
@@ -99,6 +100,32 @@ def render_detect_json(anomalies: list[Anomaly]) -> str:
         }
 
     return json.dumps([row(a) for a in anomalies], indent=2) + "\n"
+
+
+def render_hours(events: list[Event], bins: list[HourBin] | None = None) -> str:
+    """One line per shop-open hour, rebuilt from the log."""
+    if bins is None:
+        bins = by_hour(events)
+    if events:
+        day = events[0].occurred_at.date().isoformat()
+    elif bins:
+        day = bins[0].hour.date().isoformat()
+    else:
+        day = "—"
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  hourly",
+        "",
+    ]
+    for row in bins:
+        lines.append(
+            f"{row.hour:%H:%M}  "
+            f"opened {row.tickets_opened}  "
+            f"captured {row.payments_captured}  "
+            f"failed {row.payments_failed}  "
+            f"revenue {fmt_cents(row.revenue_cents)}  "
+            f"peak {row.peak_open}"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def render_replay(tickets: dict[str, Ticket], *, limit: int | None = None) -> str:

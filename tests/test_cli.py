@@ -49,6 +49,20 @@ class CliTests(unittest.TestCase):
             self.assertIn("concurrent_open", text)
             self.assertIn("detector hits", text)
 
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["hours", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("hourly", text)
+            self.assertIn("opened", text)
+            self.assertIn("captured", text)
+            self.assertIn("failed", text)
+            self.assertIn("revenue $", text)
+            self.assertIn("07:00", text)
+            self.assertIn("16:00", text)
+
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
@@ -62,6 +76,14 @@ class CliTests(unittest.TestCase):
             missing = Path(tmp) / "nope.jsonl"
             with patch("sys.stderr", new=StringIO()) as err:
                 code = main(["stats", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_hours_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["hours", "--store", str(missing)])
             self.assertEqual(code, 2)
             self.assertIn("no event log", err.getvalue())
 
