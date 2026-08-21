@@ -1,4 +1,4 @@
-"""Six statistical detectors. Named math, no model weights."""
+"""Seven statistical detectors. Named math, no model weights."""
 
 from __future__ import annotations
 
@@ -60,6 +60,51 @@ def tabular_cusum_k(p0: float, *, shift: float = 0.5) -> float | None:
     if not (0.0 < p0 < 1.0):
         return None
     return p0 + shift * math.sqrt(p0 * (1.0 - p0))
+
+
+def ewma_ucl(mu0: float, sigma: float, *, lam: float, L: float) -> float | None:
+    """Asymptotic EWMA limit: μ0 + L·σ·√(λ/(2−λ))."""
+    if L <= 0 or sigma <= 0 or not (0.0 < lam <= 1.0):
+        return None
+    return mu0 + L * sigma * math.sqrt(lam / (2.0 - lam))
+
+
+def ewma_highside(
+    values: Sequence[float],
+    *,
+    mu0: float,
+    lam: float,
+    L: float,
+    sigma: float,
+) -> list[tuple[int, int, float]]:
+    """High-side EWMA (Roberts 1959).
+
+    Z_t = λ x_t + (1−λ) Z_{t−1}, Z_0 = μ0.
+    Alarm when Z_t ≥ UCL = μ0 + L·σ·√(λ/(2−λ)).
+    Returns (decision_index, change_index, Z) once per excursion:
+    latches until Z returns to μ0 so a run is one change-point.
+    change_index is the start of the current climb
+    (last time Z was at μ0, next observation).
+    """
+    ucl = ewma_ucl(mu0, sigma, lam=lam, L=L)
+    if ucl is None:
+        return []
+    found: list[tuple[int, int, float]] = []
+    statistic = mu0
+    change: int | None = None
+    latched = False
+    for i, value in enumerate(values):
+        statistic = lam * float(value) + (1.0 - lam) * statistic
+        if statistic <= mu0:
+            change = None
+            latched = False
+            continue
+        if change is None:
+            change = i
+        if not latched and statistic >= ucl:
+            found.append((i, change, statistic))
+            latched = True
+    return found
 
 
 def cusum_highside(
@@ -254,6 +299,78 @@ def detect_payment_failure_cusum(
                     "k": k,
                     "h": h,
                     "S": statistic,
+                    "change_event_id": change.event_id,
+                    "decision_event_id": decision.event_id,
+                    "change_at": change.occurred_at.isoformat(),
+                    "baseline_until_hour": baseline_until_hour,
+                    "baseline_payments": len(early),
+                    "baseline_failures": early_fails,
+                },
+            )
+        )
+    return found
+
+
+def detect_payment_failure_ewma(
+    events: list[Event],
+    *,
+    baseline_until_hour: int = 14,
+    min_baseline: int = 8,
+    prior: float = 0.03,
+    lam: float = 0.1,
+    L: float = 3.0,
+) -> list[Anomaly]:
+    """Roberts EWMA on PaymentFailed / PaymentCaptured.
+
+    Same morning Bernoulli p0 as the CUSUM (payments before 14:00 UTC
+    so the 16:03 plant stays out of the baseline). x=1 on fail, x=0 on
+    capture. Z_t = λx_t + (1−λ)Z_{t−1}, Z_0 = p0, λ = 0.1. Alarm at
+    the asymptotic UCL with L = 3. One anomaly per excursion. A small
+    persistent rise in the fail rate moves Z before CUSUM's S reaches h.
+    """
+    payments = [e for e in events if e.type in PAYMENT_TYPES]
+    if len(payments) < min_baseline:
+        return []
+
+    early = [e for e in payments if e.occurred_at.hour < baseline_until_hour]
+    if len(early) < min_baseline:
+        return []
+    early_fails = sum(1 for e in early if e.type is EventType.PAYMENT_FAILED)
+    p0 = early_fails / len(early)
+    p0 = min(max(p0, prior), 0.5)
+    sigma = math.sqrt(p0 * (1.0 - p0))
+    ucl = ewma_ucl(p0, sigma, lam=lam, L=L)
+    if ucl is None:
+        return []
+    sigma_z = sigma * math.sqrt(lam / (2.0 - lam))
+
+    xs = [1.0 if e.type is EventType.PAYMENT_FAILED else 0.0 for e in payments]
+    found: list[Anomaly] = []
+    for decision_i, change_i, statistic in ewma_highside(
+        xs, mu0=p0, lam=lam, L=L, sigma=sigma
+    ):
+        decision = payments[decision_i]
+        change = payments[change_i]
+        run = payments[change_i : decision_i + 1]
+        standardized = (statistic - p0) / sigma_z
+        found.append(
+            Anomaly(
+                detector="payment_failure_ewma",
+                score=standardized,
+                at=decision.occurred_at,
+                summary=(
+                    f"change at {_hhmm(change.occurred_at)}  "
+                    f"Z={statistic:.3f} ≥ UCL={ucl:.3f} "
+                    f"(λ={lam:g}, L={L:g}, baseline {p0:.1%})"
+                ),
+                event_ids=tuple(e.event_id for e in run),
+                details={
+                    "p0": p0,
+                    "lambda": lam,
+                    "L": L,
+                    "Z": statistic,
+                    "UCL": ucl,
+                    "sigma": sigma,
                     "change_event_id": change.event_id,
                     "decision_event_id": decision.event_id,
                     "change_at": change.occurred_at.isoformat(),
@@ -516,6 +633,7 @@ def detect(events: list[Event]) -> list[Anomaly]:
         *detect_ticket_totals(events),
         *detect_payment_failures(events),
         *detect_payment_failure_cusum(events),
+        *detect_payment_failure_ewma(events),
         *detect_velocity(events),
         *detect_ticket_dwell(events),
         *detect_concurrent_open(events),

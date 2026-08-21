@@ -1,7 +1,7 @@
 # event-spine
 
 A day's worth of a fictional quick-lube shop, stored as events, then
-watched by six detectors that use actual statistics.
+watched by seven detectors that use actual statistics.
 
 Inspired by production event-sourced POS/analytics work. This is not
 that system. It is a small, honest demo of the same shape: append-only
@@ -60,7 +60,7 @@ the log alone.
 
 ## Detectors
 
-No model weights. Six checks with named math:
+No model weights. Seven checks with named math:
 
 1. **Ticket total z-score.** After each close, compare the ticket's
    line-item sum to the previous N tickets. Sample standard deviation
@@ -81,12 +81,19 @@ No model weights. Six checks with named math:
    proportion-z burst and this CUSUM both fire on the planted outage;
    one is a windowed rate, the other is a sequential change-point.
 
-4. **Velocity spike.** `TicketOpened` counts in fixed 5-minute bins,
+4. **Payment-failure EWMA.** Same stream, same morning p0. Roberts
+   (1959) EWMA: Z_t = λ x_t + (1−λ) Z_{t−1}, Z_0 = p0, λ = 0.1.
+   Asymptotic UCL = p0 + L·σ·√(λ/(2−λ)), L = 3, σ = √(p0(1−p0)).
+   One change-point per excursion — latches until Z returns to p0.
+   A slow rise in the decline rate moves Z before CUSUM's S reaches
+   h; the 16:03 plant still fires, usually a payment or two earlier.
+
+5. **Velocity spike.** `TicketOpened` counts in fixed 5-minute bins,
    z-score versus the previous bins. Empty bins count — otherwise a
    quiet shop looks busy. Catches a fleet that dumps eight cars on
    the lot at once.
 
-5. **Ticket dwell time.** After each close, the minutes between
+6. **Ticket dwell time.** After each close, the minutes between
    `TicketOpened` and `TicketClosed` versus the previous N closed
    tickets. Same sample z-score, high side only. Tickets that never
    closed are scored the same way against the last timestamp in the
@@ -94,7 +101,7 @@ No model weights. Six checks with named math:
    sits on one car for hours — including the unpaid outage ticket
    still sitting in a bay at close.
 
-6. **Concurrent open tickets.** Walk the log; increment on
+7. **Concurrent open tickets.** Walk the log; increment on
    `TicketOpened`, decrement on `TicketClosed`. After each, compare
    the live count to the previous N snapshots. Same sample z-score,
    high side only. Overlapping snapshots of the same cars collapse
@@ -117,21 +124,24 @@ open tickets in that hour, including cars still sitting from earlier.
 
 ## 2026-08-21
 
+Roberts EWMA on the payment-failure stream (λ = 0.1, L = 3):
+Z_t = λx_t + (1−λ)Z_{t−1}, alarm at the asymptotic UCL. Same 16:03
+card-terminal plant as the proportion-z burst and CUSUM; this one is
+a slow-burn smoother — it moves before CUSUM trips.
+
 `hours` command: rebuild an hourly shop view from the append-only log.
-
-## 2026-08-20
-
-`stats` command: ticket count, fail rate, dwell percentiles, detector hits.
-Concurrent open-ticket detector (shop load): running count versus a
-rolling sample z-score, high side only.
-
-## 2026-08-21
 
 High-side tabular CUSUM on the payment stream (Page / Montgomery:
 k = p0 + ½σ, h = 4). Same 16:03 card-terminal plant as the
 proportion-z burst; this one is a sequential change-point.
 
 Dwell detector also scores tickets that never closed, as of the last event.
+
+## 2026-08-20
+
+`stats` command: ticket count, fail rate, dwell percentiles, detector hits.
+Concurrent open-ticket detector (shop load): running count versus a
+rolling sample z-score, high side only.
 
 ## Layout
 
@@ -140,7 +150,7 @@ event_spine/events.py     fact types + jsonl codec
 event_spine/store.py      append-only store
 event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
-event_spine/detect.py     the six checks
+event_spine/detect.py     the seven checks
 event_spine/stats.py      day summary + percentiles
 event_spine/hours.py      hourly fold from the log
 event_spine/report.py     stdout

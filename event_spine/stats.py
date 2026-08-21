@@ -16,6 +16,7 @@ DETECTORS = (
     "ticket_total",
     "payment_failure",
     "payment_failure_cusum",
+    "payment_failure_ewma",
     "velocity",
     "ticket_dwell",
     "concurrent_open",

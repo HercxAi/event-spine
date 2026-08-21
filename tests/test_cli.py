@@ -28,6 +28,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("ticket_total", text)
             self.assertIn("payment_failure", text)
             self.assertIn("payment_failure_cusum", text)
+            self.assertIn("payment_failure_ewma", text)
             self.assertIn("velocity", text)
             self.assertIn("ticket_dwell", text)
             self.assertIn("concurrent_open", text)
@@ -50,6 +51,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("ticket_dwell", text)
             self.assertIn("concurrent_open", text)
             self.assertIn("payment_failure_cusum", text)
+            self.assertIn("payment_failure_ewma", text)
             self.assertIn("detector hits", text)
 
             before = path.read_text(encoding="utf-8")
@@ -115,6 +117,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("ticket_dwell", names)
             self.assertIn("concurrent_open", names)
             self.assertIn("payment_failure_cusum", names)
+            self.assertIn("payment_failure_ewma", names)
             required = {
                 "detector",
                 "score",

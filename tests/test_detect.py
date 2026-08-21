@@ -9,10 +9,13 @@ from event_spine.detect import (
     detect,
     detect_concurrent_open,
     detect_payment_failure_cusum,
+    detect_payment_failure_ewma,
     detect_payment_failures,
     detect_ticket_dwell,
     detect_ticket_totals,
     detect_velocity,
+    ewma_highside,
+    ewma_ucl,
     proportion_z,
     sample_mean_std,
     tabular_cusum_k,
@@ -88,6 +91,47 @@ class MathTests(unittest.TestCase):
         drain = math.ceil(6 * (1.0 - k) / k) + 1
         xs = [0.0] * 8 + [1.0] * 6 + [0.0] * drain + [1.0] * 6
         hits = cusum_highside(xs, k=k, h=4.0)
+        self.assertEqual(len(hits), 2)
+        self.assertEqual(hits[0][1], 8)
+        self.assertGreater(hits[1][1], hits[0][0])
+
+    def test_ewma_ucl_hand_computed(self) -> None:
+        # p0=0.03, σ=√(0.03·0.97), λ=0.1, L=3
+        # UCL = p0 + 3σ√(λ/(2−λ))
+        ucl = ewma_ucl(0.03, math.sqrt(0.03 * 0.97), lam=0.1, L=3.0)
+        assert ucl is not None
+        self.assertAlmostEqual(
+            ucl, 0.03 + 3.0 * math.sqrt(0.03 * 0.97) * math.sqrt(0.1 / 1.9)
+        )
+        self.assertIsNone(ewma_ucl(0.03, 0.0, lam=0.1, L=3.0))
+        self.assertIsNone(ewma_ucl(0.03, 0.2, lam=0.0, L=3.0))
+        self.assertIsNone(ewma_ucl(0.03, 0.2, lam=0.1, L=0.0))
+
+    def test_ewma_highside_quiet_then_fail_burst(self) -> None:
+        # Ten captures, then fails. Z_0 = p0; each capture pulls Z toward 0.
+        lam, L, p0 = 0.1, 3.0, 0.03
+        sigma = math.sqrt(p0 * (1.0 - p0))
+        ucl = ewma_ucl(p0, sigma, lam=lam, L=L)
+        assert ucl is not None
+        xs = [0.0] * 10 + [1.0] * 3
+        hits = ewma_highside(xs, mu0=p0, lam=lam, L=L, sigma=sigma)
+        self.assertEqual(len(hits), 1)
+        decision_i, change_i, statistic = hits[0]
+        z = p0 * (1.0 - lam) ** 10
+        z1 = lam * 1.0 + (1.0 - lam) * z
+        z2 = lam * 1.0 + (1.0 - lam) * z1
+        self.assertLess(z1, ucl)
+        self.assertGreaterEqual(z2, ucl)
+        self.assertEqual(change_i, 10)
+        self.assertEqual(decision_i, 11)
+        self.assertAlmostEqual(statistic, z2)
+
+    def test_ewma_highside_latches_until_reset(self) -> None:
+        lam, L, p0 = 0.1, 3.0, 0.03
+        sigma = math.sqrt(p0 * (1.0 - p0))
+        # Two fails trip; then enough captures to pull Z back to p0; then another burst.
+        xs = [0.0] * 8 + [1.0] * 3 + [0.0] * 40 + [1.0] * 3
+        hits = ewma_highside(xs, mu0=p0, lam=lam, L=L, sigma=sigma)
         self.assertEqual(len(hits), 2)
         self.assertEqual(hits[0][1], 8)
         self.assertGreater(hits[1][1], hits[0][0])
@@ -270,6 +314,158 @@ class PaymentCusumDetectorTests(unittest.TestCase):
         names = {a.detector for a in detect(events)}
         self.assertIn("payment_failure", names)
         self.assertIn("payment_failure_cusum", names)
+        self.assertIn("payment_failure_ewma", names)
+
+
+class PaymentEwmaDetectorTests(unittest.TestCase):
+    def test_flags_afternoon_fail_burst(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(20):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=10)
+        burst = at(16, 3)
+        for i in range(6):
+            events.append(
+                ev(
+                    f"f{i}",
+                    EventType.PAYMENT_FAILED,
+                    burst + timedelta(minutes=i),
+                    f"t_f{i}",
+                )
+            )
+        hits = detect_payment_failure_ewma(events)
+        self.assertEqual(len(hits), 1)
+        hit = hits[0]
+        self.assertEqual(hit.detector, "payment_failure_ewma")
+        self.assertGreaterEqual(hit.score, 3.0)
+        self.assertEqual(hit.details["change_event_id"], "f0")
+        self.assertTrue(hit.details["decision_event_id"].startswith("f"))
+        self.assertIn("f0", hit.event_ids)
+        self.assertEqual(hit.details["baseline_until_hour"], 14)
+        self.assertLess(hit.details["baseline_failures"], 1)
+        lam, L, p0 = 0.1, 3.0, 0.03
+        sigma = math.sqrt(p0 * (1.0 - p0))
+        ucl = ewma_ucl(p0, sigma, lam=lam, L=L)
+        assert ucl is not None
+        self.assertAlmostEqual(float(hit.details["UCL"]), ucl)
+        self.assertAlmostEqual(float(hit.details["lambda"]), lam)
+        self.assertGreaterEqual(float(hit.details["Z"]), ucl)
+
+    def test_one_change_point_not_a_hit_per_fail(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(16):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=12)
+        burst = at(16, 3)
+        for i in range(10):
+            events.append(
+                ev(
+                    f"f{i}",
+                    EventType.PAYMENT_FAILED,
+                    burst + timedelta(seconds=30 * i),
+                    f"t_f{i}",
+                )
+            )
+        hits = detect_payment_failure_ewma(events)
+        self.assertEqual(len(hits), 1)
+
+    def test_isolated_fail_is_quiet(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(16):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=12)
+        events.append(ev("f0", EventType.PAYMENT_FAILED, at(16, 3), "t_f"))
+        self.assertEqual(detect_payment_failure_ewma(events), [])
+
+    def test_slow_burn_flags_before_cusum(self) -> None:
+        # Morning captures, then a 1-in-7 fail drip (≈14%). CUSUM stays
+        # below h=4; the EWMA crosses UCL on the same stream.
+        events: list[Event] = []
+        t = at(8)
+        for i in range(20):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=10)
+        drip = at(15, 0)
+        for i in range(15):
+            events.append(
+                ev(
+                    f"f{i}",
+                    EventType.PAYMENT_FAILED,
+                    drip + timedelta(minutes=7 * i),
+                    f"t_f{i}",
+                )
+            )
+            for j in range(6):
+                events.append(
+                    ev(
+                        f"c{i:02d}{j}",
+                        EventType.PAYMENT_CAPTURED,
+                        drip + timedelta(minutes=7 * i, seconds=20 * (j + 1)),
+                        f"t_c{i}_{j}",
+                    )
+                )
+        events.sort(key=lambda e: (e.occurred_at, e.event_id))
+        self.assertEqual(detect_payment_failure_cusum(events), [])
+        hits = detect_payment_failure_ewma(events)
+        self.assertEqual(len(hits), 1)
+        hit = hits[0]
+        self.assertEqual(hit.detector, "payment_failure_ewma")
+        self.assertGreaterEqual(hit.score, 3.0)
+        self.assertEqual(hit.details["change_event_id"], "f0")
+        self.assertGreaterEqual(hit.at.hour, 15)
+
+    def test_baseline_excludes_afternoon_outage(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i in range(12):
+            events.append(
+                ev(f"m{i:02d}", EventType.PAYMENT_CAPTURED, t, f"t_m{i}")
+            )
+            t += timedelta(minutes=15)
+        burst = at(16, 3)
+        for i in range(6):
+            events.append(
+                ev(
+                    f"f{i}",
+                    EventType.PAYMENT_FAILED,
+                    burst + timedelta(minutes=i),
+                    f"t_f{i}",
+                )
+            )
+        hit = detect_payment_failure_ewma(events)[0]
+        self.assertEqual(hit.details["baseline_failures"], 0)
+        self.assertAlmostEqual(float(hit.details["p0"]), 0.03)
+
+    def test_seeded_day_flags_1603_outage(self) -> None:
+        events = simulate_day(SimConfig(seed=42))
+        hits = detect_payment_failure_ewma(events)
+        self.assertEqual(len(hits), 1)
+        hit = hits[0]
+        self.assertEqual(hit.detector, "payment_failure_ewma")
+        self.assertGreaterEqual(hit.score, 3.0)
+        self.assertEqual(hit.at.hour, 16)
+        self.assertGreaterEqual(hit.at.minute, 3)
+        self.assertLess(hit.at.minute, 15)
+        change_at = hit.details["change_at"]
+        self.assertTrue(str(change_at).startswith("2026-03-14T16:"))
+        self.assertTrue(hit.event_ids)
+        cusum = detect_payment_failure_cusum(events)
+        self.assertEqual(len(cusum), 1)
+        # Smoother should speak on or before the CUSUM decision.
+        self.assertLessEqual(hit.at, cusum[0].at)
+        names = {a.detector for a in detect(events)}
+        self.assertIn("payment_failure_ewma", names)
 
 
 class VelocityDetectorTests(unittest.TestCase):
