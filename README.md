@@ -44,6 +44,7 @@ python -m event_spine simulate
 python -m event_spine detect
 python -m event_spine detect --json
 python -m event_spine stats
+python -m event_spine hours
 python -m event_spine replay --limit 5
 ```
 
@@ -107,6 +108,17 @@ that justify it. `detect --json` emits the same list as a JSON array.
 payment-failure rate, p50/p95 dwell (linear interpolation, Hyndman-Fan
 type 7), and how many times each detector fired.
 
+`hours` folds the same log into one line per shop-open hour (07:00–18:00
+UTC, plus any hour that actually has events). Empty hours stay in the
+table — a quiet mid-morning is a fact, not a missing row. Each line is
+tickets opened, payments captured vs failed, revenue from captured
+`amount_cents` (integer cents, printed as dollars), and peak concurrent
+open tickets in that hour, including cars still sitting from earlier.
+
+## 2026-08-21
+
+`hours` command: rebuild an hourly shop view from the append-only log.
+
 ## 2026-08-20
 
 `stats` command: ticket count, fail rate, dwell percentiles, detector hits.
@@ -130,8 +142,9 @@ event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
 event_spine/detect.py     the six checks
 event_spine/stats.py      day summary + percentiles
+event_spine/hours.py      hourly fold from the log
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | replay
+event_spine/cli.py        simulate | detect | stats | hours | replay
 ```
 
 ## License
