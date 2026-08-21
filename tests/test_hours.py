@@ -4,7 +4,7 @@ import unittest
 
 from event_spine.detect import fmt_cents
 from event_spine.events import Event, EventType
-from event_spine.hours import HourBin, by_hour
+from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR, HourBin, by_hour
 from event_spine.report import render_hours
 from event_spine.simulate import SimConfig, simulate_day
 from tests.helpers import at, ev, ticket_flow
@@ -73,7 +73,7 @@ class HourFoldTests(unittest.TestCase):
         ]
         bins = by_hour(events)
         hours = [row.hour.hour for row in bins]
-        self.assertEqual(hours[:12], list(range(SimConfig.open_hour, SimConfig.close_hour)))
+        self.assertEqual(hours[:12], list(range(SHOP_OPEN_HOUR, SHOP_CLOSE_HOUR)))
         nine = next(row for row in bins if row.hour.hour == 9)
         self.assertEqual(nine.tickets_opened, 0)
         self.assertEqual(nine.payments_captured, 0)
@@ -89,9 +89,9 @@ class HourFoldTests(unittest.TestCase):
 
     def test_empty_log_still_emits_shop_hours(self) -> None:
         bins = by_hour([])
-        self.assertEqual(len(bins), SimConfig.close_hour - SimConfig.open_hour)
-        self.assertEqual(bins[0].hour.hour, SimConfig.open_hour)
-        self.assertEqual(bins[-1].hour.hour, SimConfig.close_hour - 1)
+        self.assertEqual(len(bins), SHOP_CLOSE_HOUR - SHOP_OPEN_HOUR)
+        self.assertEqual(bins[0].hour.hour, SHOP_OPEN_HOUR)
+        self.assertEqual(bins[-1].hour.hour, SHOP_CLOSE_HOUR - 1)
         for row in bins:
             self.assertEqual(row.tickets_opened, 0)
             self.assertEqual(row.payments_captured, 0)
@@ -146,7 +146,7 @@ class HourFoldTests(unittest.TestCase):
     def test_seeded_day_partitions_the_log(self) -> None:
         events = simulate_day(SimConfig(seed=42))
         bins = by_hour(events)
-        shop = list(range(SimConfig.open_hour, SimConfig.close_hour))
+        shop = list(range(SHOP_OPEN_HOUR, SHOP_CLOSE_HOUR))
         self.assertEqual([row.hour.hour for row in bins[: len(shop)]], shop)
         self.assertEqual(
             sum(row.tickets_opened for row in bins),

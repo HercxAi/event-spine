@@ -8,6 +8,10 @@ from datetime import UTC, datetime, timedelta
 from event_spine.events import Event, EventType
 from event_spine.simulate import DAY, SimConfig
 
+_SHOP = SimConfig()
+SHOP_OPEN_HOUR = _SHOP.open_hour
+SHOP_CLOSE_HOUR = _SHOP.close_hour
+
 
 @dataclass(frozen=True, slots=True)
 class HourBin:
@@ -26,8 +30,8 @@ def _hour_start(dt: datetime) -> datetime:
 def by_hour(
     events: list[Event],
     *,
-    open_hour: int = SimConfig.open_hour,
-    close_hour: int = SimConfig.close_hour,
+    open_hour: int = SHOP_OPEN_HOUR,
+    close_hour: int = SHOP_CLOSE_HOUR,
 ) -> list[HourBin]:
     """Rebuild one bin per shop-open hour, plus any hour that actually has events.
 
