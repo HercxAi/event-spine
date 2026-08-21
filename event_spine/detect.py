@@ -1,9 +1,9 @@
-"""Four statistical detectors. Named math, no model weights."""
+"""Five statistical detectors. Named math, no model weights."""
 
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -288,20 +288,92 @@ def detect_ticket_dwell(
     return found
 
 
+def detect_concurrent_open(
+    events: list[Event],
+    *,
+    window: int = 16,
+    z_thresh: float = 2.8,
+    min_samples: int = 8,
+    min_count: int = 4,
+) -> list[Anomaly]:
+    """High-side z-score of tickets open at once vs prior open/close snapshots."""
+    steps = [
+        e
+        for e in events
+        if e.type in (EventType.TICKET_OPENED, EventType.TICKET_CLOSED)
+    ]
+    steps.sort(key=lambda e: (e.occurred_at, e.ticket_id, e.type.value))
+
+    found: list[Anomaly] = []
+    history: list[float] = []
+    open_events: dict[str, Event] = {}
+    concurrent = 0
+    for event in steps:
+        if event.type is EventType.TICKET_OPENED:
+            concurrent += 1
+            open_events[event.ticket_id] = event
+        else:
+            concurrent = max(0, concurrent - 1)
+            open_events.pop(event.ticket_id, None)
+
+        baseline = history[-window:]
+        if len(baseline) >= min_samples and concurrent >= min_count:
+            z = zscore(float(concurrent), baseline)
+            if z is not None and z >= z_thresh:
+                stats = sample_mean_std(baseline)
+                assert stats is not None
+                mean, std = stats
+                justifying = tuple(
+                    e.event_id
+                    for e in sorted(
+                        open_events.values(),
+                        key=lambda e: (e.occurred_at, e.event_id),
+                    )
+                )
+                found.append(
+                    Anomaly(
+                        detector="concurrent_open",
+                        score=z,
+                        at=event.occurred_at,
+                        summary=(
+                            f"{concurrent} open at {_hhmm(event.occurred_at)} "
+                            f"vs baseline {mean:.1f} (σ={std:.1f})"
+                        ),
+                        event_ids=justifying,
+                        details={
+                            "concurrent": concurrent,
+                            "baseline_mean": mean,
+                            "baseline_std": std,
+                            "window": len(baseline),
+                        },
+                    )
+                )
+        history.append(float(concurrent))
+    return _peak_windows(
+        found,
+        rank=lambda a: (-int(a.details.get("concurrent", 0)), -a.score, a.at),
+    )
+
+
 def detect(events: list[Event]) -> list[Anomaly]:
     anomalies = [
         *detect_ticket_totals(events),
         *detect_payment_failures(events),
         *detect_velocity(events),
         *detect_ticket_dwell(events),
+        *detect_concurrent_open(events),
     ]
     anomalies.sort(key=lambda a: (a.at, -a.score, a.detector))
     return anomalies
 
 
-def _peak_windows(candidates: list[Anomaly]) -> list[Anomaly]:
-    """Keep the highest-scoring window; drop ones that share an event id."""
-    ranked = sorted(candidates, key=lambda a: (-a.score, a.at))
+def _peak_windows(
+    candidates: list[Anomaly],
+    *,
+    rank: Callable[[Anomaly], tuple[Any, ...]] | None = None,
+) -> list[Anomaly]:
+    """Keep the highest-ranked hit; drop ones that share an event id."""
+    ranked = sorted(candidates, key=rank or (lambda a: (-a.score, a.at)))
     kept: list[Anomaly] = []
     used: set[str] = set()
     for anomaly in ranked:

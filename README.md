@@ -1,7 +1,7 @@
 # event-spine
 
 A day's worth of a fictional quick-lube shop, stored as events, then
-watched by four detectors that use actual statistics.
+watched by five detectors that use actual statistics.
 
 Inspired by production event-sourced POS/analytics work. This is not
 that system. It is a small, honest demo of the same shape: append-only
@@ -59,7 +59,7 @@ the log alone.
 
 ## Detectors
 
-No model weights. Four checks with named math:
+No model weights. Five checks with named math:
 
 1. **Ticket total z-score.** After each close, compare the ticket's
    line-item sum to the previous N tickets. Sample standard deviation
@@ -81,6 +81,13 @@ No model weights. Four checks with named math:
    tickets. Same sample z-score, high side only. Catches a bay that
    sits on one car for hours.
 
+5. **Concurrent open tickets.** Walk the log; increment on
+   `TicketOpened`, decrement on `TicketClosed`. After each, compare
+   the live count to the previous N snapshots. Same sample z-score,
+   high side only. Overlapping snapshots of the same cars collapse
+   to the fullest lot. Catches a pile-up — the shop holding far more
+   cars at once than the recent baseline.
+
 Each anomaly prints the score, the window or ticket, and the event ids
 that justify it. `detect --json` emits the same list as a JSON array.
 
@@ -91,6 +98,8 @@ type 7), and how many times each detector fired.
 ## 2026-08-20
 
 `stats` command: ticket count, fail rate, dwell percentiles, detector hits.
+Concurrent open-ticket detector (shop load): running count versus a
+rolling sample z-score, high side only.
 
 ## Layout
 
@@ -99,7 +108,7 @@ event_spine/events.py     fact types + jsonl codec
 event_spine/store.py      append-only store
 event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
-event_spine/detect.py     the four checks
+event_spine/detect.py     the five checks
 event_spine/stats.py      day summary + percentiles
 event_spine/report.py     stdout
 event_spine/cli.py        simulate | detect | stats | replay
