@@ -8,6 +8,8 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from event_spine.cli import main
+from event_spine.simulate import SimConfig, simulate_day
+from event_spine.store import JsonlEventStore
 
 
 class CliTests(unittest.TestCase):
@@ -70,6 +72,16 @@ class CliTests(unittest.TestCase):
             self.assertIn("07:00", text)
             self.assertIn("16:00", text)
 
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["gaps", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("silent gaps", text)
+            self.assertIn("45min", text)
+            self.assertIn("no silent gaps", text)
+
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
@@ -91,6 +103,14 @@ class CliTests(unittest.TestCase):
             missing = Path(tmp) / "nope.jsonl"
             with patch("sys.stderr", new=StringIO()) as err:
                 code = main(["hours", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_gaps_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["gaps", "--store", str(missing)])
             self.assertEqual(code, 2)
             self.assertIn("no event log", err.getvalue())
 
@@ -134,3 +154,26 @@ class CliTests(unittest.TestCase):
                 self.assertTrue(row["at"].endswith("+00:00") or "T" in row["at"])
                 self.assertIsInstance(row["event_ids"], list)
                 self.assertIsInstance(row["details"], dict)
+
+    def test_gaps_flags_planted_lunch_silence(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            events = simulate_day(
+                SimConfig(
+                    seed=42,
+                    silent_gap_hour=12,
+                    silent_gap_minute=10,
+                    silent_gap_minutes=50,
+                )
+            )
+            JsonlEventStore(path).append_many(events)
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["gaps", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("TicketOpened", text)
+            self.assertNotIn("no silent gaps", text)
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["detect", "--store", str(path)])
+            self.assertEqual(code, 0)
+            self.assertIn("silent_gap", out.getvalue())

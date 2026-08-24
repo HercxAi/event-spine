@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, replay tickets, or fold hours."""
+"""simulate a day, detect anomalies, summarize the log, replay tickets, fold hours, or list silent gaps."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from event_spine.project import project
 from event_spine.report import (
     render_detect,
     render_detect_json,
+    render_gaps,
     render_hours,
     render_replay,
     render_stats,
@@ -50,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
     hrs = sub.add_parser("hours", help="hourly tickets, payments, and revenue from the log")
     hrs.add_argument("--store", type=Path, default=DEFAULT_STORE)
 
+    gps = sub.add_parser(
+        "gaps",
+        help="shop-hour stretches with no TicketOpened longer than 45 minutes",
+    )
+    gps.add_argument("--store", type=Path, default=DEFAULT_STORE)
+
     rep = sub.add_parser("replay", help="fold events into tickets and print them")
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
     rep.add_argument("--limit", type=int, default=None)
@@ -63,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
         return _stats(args.store)
     if args.cmd == "hours":
         return _hours(args.store)
+    if args.cmd == "gaps":
+        return _gaps(args.store)
     if args.cmd == "replay":
         return _replay(args.store, args.limit)
     return 2
@@ -117,6 +126,14 @@ def _hours(path: Path) -> int:
     if not events:
         return 2
     print(render_hours(events), end="")
+    return 0
+
+
+def _gaps(path: Path) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    print(render_gaps(events), end="")
     return 0
 
 

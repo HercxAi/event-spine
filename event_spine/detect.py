@@ -1,4 +1,4 @@
-"""Eight statistical detectors. Named math, no model weights."""
+"""Nine statistical detectors. Named math, no model weights."""
 
 from __future__ import annotations
 
@@ -9,7 +9,13 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from event_spine.events import PAYMENT_TYPES, Event, EventType
+from event_spine.gaps import shop_open_gaps
+from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR
 from event_spine.project import closed_in_order, project
+
+# Longer than the seeded day's natural holes (max ~45min), short enough
+# that a skipped lunch rush or a dead register is obvious.
+SILENT_GAP_MINUTES = 45
 
 
 @dataclass(frozen=True, slots=True)
@@ -723,6 +729,52 @@ def detect_concurrent_open(
     )
 
 
+def detect_silent_gap(
+    events: list[Event],
+    *,
+    threshold_min: float = SILENT_GAP_MINUTES,
+    open_hour: int = SHOP_OPEN_HOUR,
+    close_hour: int = SHOP_CLOSE_HOUR,
+) -> list[Anomaly]:
+    """Flag shop-hour stretches with no TicketOpened longer than threshold.
+
+    Rebuilt from the log: walk TicketOpened during [open, close), including
+    the open→first and last→close legs. After-hours silence is ignored.
+    Score is the gap length in minutes.
+    """
+    found: list[Anomaly] = []
+    for gap in shop_open_gaps(events, open_hour=open_hour, close_hour=close_hour):
+        if gap.minutes < threshold_min:
+            continue
+        event_ids = tuple(
+            eid for eid in (gap.before_event_id, gap.after_event_id) if eid
+        )
+        found.append(
+            Anomaly(
+                detector="silent_gap",
+                score=gap.minutes,
+                at=gap.start,
+                summary=(
+                    f"{gap.minutes:.0f}min with no TicketOpened "
+                    f"{_hhmm(gap.start)}–{_hhmm(gap.end)} "
+                    f"(threshold {threshold_min:g}min)"
+                ),
+                event_ids=event_ids,
+                details={
+                    "gap_minutes": gap.minutes,
+                    "threshold_minutes": threshold_min,
+                    "window_start": gap.start.isoformat(),
+                    "window_end": gap.end.isoformat(),
+                    "open_hour": open_hour,
+                    "close_hour": close_hour,
+                    "before_event_id": gap.before_event_id,
+                    "after_event_id": gap.after_event_id,
+                },
+            )
+        )
+    return found
+
+
 def detect(events: list[Event]) -> list[Anomaly]:
     anomalies = [
         *detect_ticket_totals(events),
@@ -733,6 +785,7 @@ def detect(events: list[Event]) -> list[Anomaly]:
         *detect_velocity(events),
         *detect_ticket_dwell(events),
         *detect_concurrent_open(events),
+        *detect_silent_gap(events),
     ]
     anomalies.sort(key=lambda a: (a.at, -a.score, a.detector))
     return anomalies

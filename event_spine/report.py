@@ -6,9 +6,9 @@ import json
 import math
 from typing import Any
 
-from event_spine.detect import Anomaly, detect, fmt_cents
+from event_spine.detect import SILENT_GAP_MINUTES, Anomaly, detect, detect_silent_gap, fmt_cents
 from event_spine.events import Event, EventType
-from event_spine.hours import HourBin, by_hour
+from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR, HourBin, by_hour
 from event_spine.project import Ticket, project
 from event_spine.simulate import SHOP
 from event_spine.stats import DayStats, summarize
@@ -51,6 +51,8 @@ def render_detect(events: list[Event], anomalies: list[Anomaly] | None = None) -
             label = "Z"
         elif a.detector == "ticket_total_mad":
             label = "M"
+        elif a.detector == "silent_gap":
+            label = "min"
         else:
             label = "z"
         lines.append(f"{i}. {a.detector}  {label}={score}")
@@ -133,6 +135,36 @@ def render_hours(events: list[Event], bins: list[HourBin] | None = None) -> str:
             f"revenue {fmt_cents(row.revenue_cents)}  "
             f"peak {row.peak_open}"
         )
+    return "\n".join(lines) + "\n"
+
+
+def render_gaps(events: list[Event], anomalies: list[Anomaly] | None = None) -> str:
+    """Silent shop-hour stretches with no TicketOpened, rebuilt from the log."""
+    if anomalies is None:
+        anomalies = detect_silent_gap(events)
+    if events:
+        day = events[0].occurred_at.date().isoformat()
+    else:
+        day = "—"
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  silent gaps",
+        (
+            f"threshold {SILENT_GAP_MINUTES:g}min during "
+            f"{SHOP_OPEN_HOUR:02d}:00–{SHOP_CLOSE_HOUR:02d}:00"
+        ),
+        "",
+    ]
+    if not anomalies:
+        lines.append("no silent gaps")
+        return "\n".join(lines) + "\n"
+    for i, a in enumerate(anomalies, start=1):
+        lines.append(f"{i}. {a.summary}")
+        if a.event_ids:
+            shown = a.event_ids[:8]
+            extra = f" +{len(a.event_ids) - 8} more" if len(a.event_ids) > 8 else ""
+            lines.append(f"   events: {', '.join(shown)}{extra}")
+        if i != len(anomalies):
+            lines.append("")
     return "\n".join(lines) + "\n"
 
 
