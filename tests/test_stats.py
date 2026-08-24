@@ -69,6 +69,7 @@ class SummarizeTests(unittest.TestCase):
         self.assertEqual(hits["ticket_total"], 0)
         self.assertIn("payment_failure", hits)
         self.assertIn("velocity", hits)
+        self.assertIn("silent_gap", hits)
 
     def test_open_ticket_is_counted_but_not_in_dwell(self) -> None:
         events = [
@@ -117,3 +118,4 @@ class SummarizeTests(unittest.TestCase):
         self.assertGreater(by_name["payment_failure_ewma"], 0)
         self.assertGreater(by_name["velocity"], 0)
         self.assertGreater(by_name["concurrent_open"], 0)
+        self.assertEqual(by_name["silent_gap"], 0)

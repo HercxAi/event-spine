@@ -61,6 +61,12 @@ class SimConfig:
     open_hour: int = 7
     close_hour: int = 19
     mean_gap_s: float = 14 * 60
+    # Optional hole in the arrival stream. Off by default so seed 42
+    # stays the four-plant day; tests turn this on to plant a lunch
+    # silence or a dead register.
+    silent_gap_hour: int | None = None
+    silent_gap_minute: int = 0
+    silent_gap_minutes: int = 0
 
 
 class _Ids:
@@ -98,6 +104,15 @@ def simulate_day(config: SimConfig | None = None) -> list[Event]:
     arrivals.append(whale_at)
     arrivals.append(dwell_at)
     arrivals.sort()
+    if cfg.silent_gap_hour is not None and cfg.silent_gap_minutes > 0:
+        gap_start = clock.replace(
+            hour=cfg.silent_gap_hour,
+            minute=cfg.silent_gap_minute,
+            second=0,
+            microsecond=0,
+        )
+        gap_end = gap_start + timedelta(minutes=cfg.silent_gap_minutes)
+        arrivals = [t for t in arrivals if not (gap_start <= t < gap_end)]
 
     outage_end = outage_at + timedelta(minutes=7)
     whale_used = False
