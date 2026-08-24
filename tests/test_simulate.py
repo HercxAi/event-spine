@@ -56,15 +56,17 @@ class SimulateTests(unittest.TestCase):
         names = {a.detector for a in anomalies}
         self.assertIn("ticket_total", names)
         self.assertIn("ticket_total_mad", names)
+        self.assertIn("ticket_total_iqr", names)
         self.assertIn("payment_failure", names)
         self.assertIn("payment_failure_cusum", names)
         self.assertIn("payment_failure_ewma", names)
         self.assertIn("velocity", names)
         self.assertIn("ticket_dwell", names)
         self.assertIn("concurrent_open", names)
+        floors = {"ticket_total_iqr": 1.5}
         for anomaly in anomalies:
             self.assertGreater(len(anomaly.event_ids), 0)
-            self.assertGreaterEqual(anomaly.score, 2.5)
+            self.assertGreaterEqual(anomaly.score, floors.get(anomaly.detector, 2.5))
         open_ids = {tid for tid, t in project(events).items() if not t.closed}
         self.assertTrue(open_ids)
         dwell_ids = {a.ticket_id for a in anomalies if a.detector == "ticket_dwell"}

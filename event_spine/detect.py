@@ -9,13 +9,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from event_spine.events import PAYMENT_TYPES, Event, EventType
-from event_spine.gaps import shop_open_gaps
-from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR
 from event_spine.project import closed_in_order, project
-
-# Longer than the seeded day's natural holes (max ~45min), short enough
-# that a skipped lunch rush or a dead register is obvious.
-SILENT_GAP_MINUTES = 45
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +82,43 @@ def modified_zscore(value: float, baseline: Sequence[float]) -> float | None:
     if spread == 0.0:
         return 0.0 if value == med else math.inf
     return MAD_CONSISTENCY * (value - med) / spread
+
+
+def percentile(values: Sequence[float], p: float) -> float | None:
+    """Hyndman-Fan type 7 (linear interpolation). None if empty."""
+    n = len(values)
+    if n == 0:
+        return None
+    if not 0.0 <= p <= 1.0:
+        raise ValueError(f"percentile p must be in [0, 1], got {p}")
+    ordered = sorted(values)
+    if n == 1:
+        return float(ordered[0])
+    idx = (n - 1) * p
+    lo = math.floor(idx)
+    hi = math.ceil(idx)
+    if lo == hi:
+        return float(ordered[lo])
+    frac = idx - lo
+    return float(ordered[lo]) * (1.0 - frac) + float(ordered[hi]) * frac
+
+
+def tukey_highside(value: float, baseline: Sequence[float]) -> float | None:
+    """High-side Tukey fence score: (x − Q3) / IQR.
+
+    Inner fence is score >= 1.5. None if n < 4.
+    Zero IQR: 0 if x == Q3, else +inf.
+    """
+    if len(baseline) < 4:
+        return None
+    q1 = percentile(baseline, 0.25)
+    q3 = percentile(baseline, 0.75)
+    if q1 is None or q3 is None:
+        return None
+    spread = q3 - q1
+    if spread == 0.0:
+        return 0.0 if value == q3 else math.inf
+    return (value - q3) / spread
 
 
 def proportion_z(successes: int, n: int, p0: float) -> float | None:
@@ -284,6 +315,64 @@ def detect_ticket_totals_mad(
                             "total_cents": ticket.total_cents,
                             "baseline_median_cents": med,
                             "baseline_mad_cents": spread,
+                            "window": len(baseline),
+                        },
+                    )
+                )
+        history.append(total)
+    return found
+
+
+def detect_ticket_totals_iqr(
+    events: list[Event],
+    *,
+    window: int = 16,
+    k: float = 1.5,
+    min_samples: int = 8,
+) -> list[Anomaly]:
+    """High-side Tukey inner fence on a closed ticket total.
+
+    Score = (x − Q3) / IQR versus the previous N tickets. Alarm at
+    k = 1.5 (the published inner fence). Quartiles are Hyndman-Fan
+    type 7. A prior whale that inflates sample σ still sits in one
+    tail of the box; the fence does not walk with it the way mean+σ
+    does.
+    """
+    tickets = closed_in_order(project(events))
+    close_by_id = {
+        e.ticket_id: e
+        for e in events
+        if e.type is EventType.TICKET_CLOSED
+    }
+    found: list[Anomaly] = []
+    history: list[float] = []
+    for ticket in tickets:
+        total = float(ticket.total_cents)
+        baseline = history[-window:]
+        if len(baseline) >= min_samples:
+            score = tukey_highside(total, baseline)
+            if score is not None and score >= k:
+                q1 = percentile(baseline, 0.25)
+                q3 = percentile(baseline, 0.75)
+                assert q1 is not None and q3 is not None
+                close = close_by_id[ticket.ticket_id]
+                found.append(
+                    Anomaly(
+                        detector="ticket_total_iqr",
+                        score=score,
+                        at=ticket.closed_at or ticket.opened_at,
+                        summary=(
+                            f"{ticket.ticket_id} {fmt_cents(ticket.total_cents)} "
+                            f"vs Q3 {fmt_cents(int(round(q3)))} "
+                            f"(IQR={fmt_cents(int(round(q3 - q1)))})"
+                        ),
+                        event_ids=(close.event_id,),
+                        ticket_id=ticket.ticket_id,
+                        details={
+                            "total_cents": ticket.total_cents,
+                            "baseline_q1_cents": q1,
+                            "baseline_q3_cents": q3,
+                            "baseline_iqr_cents": q3 - q1,
                             "window": len(baseline),
                         },
                     )
@@ -729,63 +818,17 @@ def detect_concurrent_open(
     )
 
 
-def detect_silent_gap(
-    events: list[Event],
-    *,
-    threshold_min: float = SILENT_GAP_MINUTES,
-    open_hour: int = SHOP_OPEN_HOUR,
-    close_hour: int = SHOP_CLOSE_HOUR,
-) -> list[Anomaly]:
-    """Flag shop-hour stretches with no TicketOpened longer than threshold.
-
-    Rebuilt from the log: walk TicketOpened during [open, close), including
-    the open→first and last→close legs. After-hours silence is ignored.
-    Score is the gap length in minutes.
-    """
-    found: list[Anomaly] = []
-    for gap in shop_open_gaps(events, open_hour=open_hour, close_hour=close_hour):
-        if gap.minutes < threshold_min:
-            continue
-        event_ids = tuple(
-            eid for eid in (gap.before_event_id, gap.after_event_id) if eid
-        )
-        found.append(
-            Anomaly(
-                detector="silent_gap",
-                score=gap.minutes,
-                at=gap.start,
-                summary=(
-                    f"{gap.minutes:.0f}min with no TicketOpened "
-                    f"{_hhmm(gap.start)}–{_hhmm(gap.end)} "
-                    f"(threshold {threshold_min:g}min)"
-                ),
-                event_ids=event_ids,
-                details={
-                    "gap_minutes": gap.minutes,
-                    "threshold_minutes": threshold_min,
-                    "window_start": gap.start.isoformat(),
-                    "window_end": gap.end.isoformat(),
-                    "open_hour": open_hour,
-                    "close_hour": close_hour,
-                    "before_event_id": gap.before_event_id,
-                    "after_event_id": gap.after_event_id,
-                },
-            )
-        )
-    return found
-
-
 def detect(events: list[Event]) -> list[Anomaly]:
     anomalies = [
         *detect_ticket_totals(events),
         *detect_ticket_totals_mad(events),
+        *detect_ticket_totals_iqr(events),
         *detect_payment_failures(events),
         *detect_payment_failure_cusum(events),
         *detect_payment_failure_ewma(events),
         *detect_velocity(events),
         *detect_ticket_dwell(events),
         *detect_concurrent_open(events),
-        *detect_silent_gap(events),
     ]
     anomalies.sort(key=lambda a: (a.at, -a.score, a.detector))
     return anomalies

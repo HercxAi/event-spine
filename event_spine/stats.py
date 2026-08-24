@@ -15,13 +15,13 @@ from event_spine.project import closed_in_order, project
 DETECTORS = (
     "ticket_total",
     "ticket_total_mad",
+    "ticket_total_iqr",
     "payment_failure",
     "payment_failure_cusum",
     "payment_failure_ewma",
     "velocity",
     "ticket_dwell",
     "concurrent_open",
-    "silent_gap",
 )
 
 

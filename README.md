@@ -45,7 +45,6 @@ python -m event_spine detect
 python -m event_spine detect --json
 python -m event_spine stats
 python -m event_spine hours
-python -m event_spine gaps
 python -m event_spine replay --limit 5
 ```
 
@@ -115,13 +114,12 @@ No model weights. Nine checks with named math:
    to the fullest lot. Catches a pile-up — the shop holding far more
    cars at once than the recent baseline.
 
-9. **Shop-open silent gap.** Walk `TicketOpened` during configured shop
-   hours (07:00–19:00 UTC). Shop open and shop close bound the day, so
-   a register that never starts — or that dies before close — still
-   shows up. Flag any stretch of 45 minutes or longer with no open.
-   After-hours silence is ignored. The seeded day stays quiet (longest
-   natural hole is just under 45 minutes). A planted lunch-rush hole
-   or a dead-register stretch does not.
+9. **Ticket total Tukey fence.** Same closed totals, scored with
+   Tukey's inner fence: (x − Q3) / IQR against the previous N
+   tickets, high side only, alarm at 1.5. Quartiles are Hyndman-Fan
+   type 7. A prior whale inflates sample σ; it does not drag Q3 and
+   IQR the same way. Bessel, MAD, and this fence all fire on the
+   planted flush ticket.
 
 Each anomaly prints the score, the window or ticket, and the event ids
 that justify it. `detect --json` emits the same list as a JSON array.
@@ -137,18 +135,13 @@ tickets opened, payments captured vs failed, revenue from captured
 `amount_cents` (integer cents, printed as dollars), and peak concurrent
 open tickets in that hour, including cars still sitting from earlier.
 
-`gaps` folds the same log into the shop-hour stretches with no
-`TicketOpened` of 45 minutes or longer. Same rebuild as the silent-gap
-detector; the events stay put.
-
 ## 2026-08-24
 
-Shop-open silent-gap detector: during 07:00–19:00 UTC, flag any stretch
-with no `TicketOpened` of 45 minutes or longer. Rebuilt from the
-append-only log the same way `hours` is — shop open and close bound the
-day, after-hours silence does not count. `gaps` prints the holes;
-`detect` includes the check. The seeded day is busy enough to stay
-quiet; a planted lunch-rush gap or a dead-register stretch is not.
+Tukey inner fence on ticket totals: score = (x − Q3) / IQR, alarm
+at 1.5. Quartiles are Hyndman-Fan type 7. Same $565 flush plant as
+the Bessel z-score and the MAD modified z; this one is a rank-based
+box instead of a σ estimate, so a prior whale still does not hide
+the next one.
 
 ## 2026-08-21
 
@@ -186,9 +179,8 @@ event_spine/simulate.py   seeded day generator
 event_spine/detect.py     the nine checks
 event_spine/stats.py      day summary + percentiles
 event_spine/hours.py      hourly fold from the log
-event_spine/gaps.py       shop-hour TicketOpened gaps
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | replay
+event_spine/cli.py        simulate | detect | stats | hours | replay
 ```
 
 ## License
