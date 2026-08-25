@@ -152,6 +152,15 @@ silence is ignored. `detect` flags holes of 45 minutes or longer.
 opened and closed, payments captured vs failed, revenue from captured
 `amount_cents` (integer cents, printed as dollars), leftover still-open
 tickets at the end of the log, and the same detector hit counts.
+`brief --json` emits the same fold as a JSON object (cents stay ints).
+
+## 2026-08-25
+
+`brief --json`: same daily ops fold as the human brief, as a JSON
+object — shop, day, opens/closes, captured vs failed, revenue in
+integer cents, leftover open tickets, and detector hit counts.
+Pipe it into whatever watches the shop without scraping stdout.
+Run `python -m event_spine brief --json`.
 
 ## 2026-08-24
 

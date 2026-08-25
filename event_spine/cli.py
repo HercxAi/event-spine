@@ -12,6 +12,7 @@ from event_spine.events import Event, EventType
 from event_spine.project import project
 from event_spine.report import (
     render_brief,
+    render_brief_json,
     render_detect,
     render_detect_json,
     render_gaps,
@@ -54,6 +55,12 @@ def main(argv: list[str] | None = None) -> int:
 
     br = sub.add_parser("brief", help="one-page daily ops brief rebuilt from the log")
     br.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    br.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the brief as a JSON object",
+    )
 
     gps = sub.add_parser(
         "gaps",
@@ -75,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "hours":
         return _hours(args.store)
     if args.cmd == "brief":
-        return _brief(args.store)
+        return _brief(args.store, args.as_json)
     if args.cmd == "gaps":
         return _gaps(args.store)
     if args.cmd == "replay":
@@ -135,11 +142,14 @@ def _hours(path: Path) -> int:
     return 0
 
 
-def _brief(path: Path) -> int:
+def _brief(path: Path, as_json: bool = False) -> int:
     events = _load(path)
     if not path.exists():
         return 2
-    print(render_brief(events), end="")
+    if as_json:
+        print(render_brief_json(events), end="")
+    else:
+        print(render_brief(events), end="")
     return 0
 
 

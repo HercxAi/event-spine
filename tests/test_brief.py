@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import timedelta
 
 from event_spine.brief import from_log
 from event_spine.detect import detect, fmt_cents
 from event_spine.events import Event, EventType
-from event_spine.report import render_brief
+from event_spine.report import render_brief, render_brief_json
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.stats import DETECTORS, summarize
 from tests.helpers import at, ev, ticket_flow
@@ -163,3 +164,24 @@ class BriefFoldTests(unittest.TestCase):
         self.assertIn("bay 3", text)
         self.assertIn(f"revenue {fmt_cents(12997)}", text)
         self.assertIn("daily brief", text)
+
+    def test_render_brief_json_matches_fold(self) -> None:
+        events = [
+            *ticket_flow("t_done", at(8), 12997, prefix="r"),
+            ev("o1", EventType.TICKET_OPENED, at(16, 3), "t_left", bay="3", vehicle="x"),
+        ]
+        brief = from_log(events)
+        payload = json.loads(render_brief_json(events, brief))
+        self.assertEqual(payload["tickets_opened"], 2)
+        self.assertEqual(payload["tickets_closed"], 1)
+        self.assertEqual(payload["revenue_cents"], 12997)
+        self.assertEqual(len(payload["leftover"]), 1)
+        left = payload["leftover"][0]
+        self.assertEqual(left["ticket_id"], "t_left")
+        self.assertEqual(left["bay"], "3")
+        self.assertEqual(left["total_cents"], 0)
+        # zero-total open ticket is paid under the fold (captured >= 0)
+        self.assertTrue(left["paid"])
+        self.assertTrue(left["opened_at"].endswith("+00:00") or "T" in left["opened_at"])
+        hits = {row["detector"]: row["count"] for row in payload["detector_hits"]}
+        self.assertEqual(hits, dict(brief.detector_hits))

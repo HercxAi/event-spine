@@ -201,6 +201,56 @@ class CliTests(unittest.TestCase):
                 self.assertIsInstance(row["event_ids"], list)
                 self.assertIsInstance(row["details"], dict)
 
+    def test_brief_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["brief", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            for key in (
+                "shop",
+                "day",
+                "events",
+                "tickets_opened",
+                "tickets_closed",
+                "payments_captured",
+                "payments_failed",
+                "revenue_cents",
+                "leftover",
+                "detector_hits",
+            ):
+                self.assertIn(key, payload)
+            self.assertIsInstance(payload["leftover"], list)
+            self.assertIsInstance(payload["detector_hits"], list)
+            self.assertGreater(payload["tickets_opened"], 0)
+            self.assertGreaterEqual(payload["revenue_cents"], 0)
+            names = {row["detector"] for row in payload["detector_hits"]}
+            self.assertIn("silent_gap", names)
+            self.assertIn("ticket_total_iqr", names)
+            for row in payload["detector_hits"]:
+                self.assertEqual({"detector", "count"}, set(row.keys()))
+                self.assertIsInstance(row["count"], int)
+
+    def test_brief_json_empty_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "empty.jsonl"
+            path.write_text("", encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["brief", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            payload = json.loads(out.getvalue())
+            self.assertIsNone(payload["day"])
+            self.assertEqual(payload["events"], 0)
+            self.assertEqual(payload["tickets_opened"], 0)
+            self.assertEqual(payload["leftover"], [])
+            self.assertEqual(payload["revenue_cents"], 0)
+
     def test_gaps_flags_planted_lunch_silence(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "day.jsonl"

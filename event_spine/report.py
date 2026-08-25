@@ -126,6 +126,38 @@ def render_brief(events: list[Event], brief: DayBrief | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_brief_json(events: list[Event], brief: DayBrief | None = None) -> str:
+    """JSON object for the daily ops brief. Human stdout stays the default."""
+    if brief is None:
+        brief = from_log(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    leftover = [
+        {
+            "ticket_id": ticket.ticket_id,
+            "opened_at": ticket.opened_at.isoformat(),
+            "bay": ticket.bay or None,
+            "total_cents": ticket.total_cents,
+            "paid": ticket.paid,
+        }
+        for ticket in brief.leftover
+    ]
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": brief.events,
+        "tickets_opened": brief.tickets_opened,
+        "tickets_closed": brief.tickets_closed,
+        "payments_captured": brief.payments_captured,
+        "payments_failed": brief.payments_failed,
+        "revenue_cents": brief.revenue_cents,
+        "leftover": leftover,
+        "detector_hits": [
+            {"detector": name, "count": count} for name, count in brief.detector_hits
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
 def render_detect_json(anomalies: list[Anomaly]) -> str:
     """JSON array of anomalies. Human stdout stays the default elsewhere."""
 
