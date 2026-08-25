@@ -118,3 +118,4 @@ class SummarizeTests(unittest.TestCase):
         self.assertGreater(by_name["payment_failure_ewma"], 0)
         self.assertGreater(by_name["velocity"], 0)
         self.assertGreater(by_name["concurrent_open"], 0)
+        self.assertGreater(by_name["declined_abandoned"], 0)

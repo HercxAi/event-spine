@@ -56,6 +56,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("payment_failure_cusum", text)
             self.assertIn("payment_failure_ewma", text)
             self.assertIn("ticket_total_mad", text)
+            self.assertIn("declined_abandoned", text)
             self.assertIn("detector hits", text)
 
             before = path.read_text(encoding="utf-8")
@@ -81,6 +82,17 @@ class CliTests(unittest.TestCase):
             self.assertIn("silent gaps", text)
             self.assertIn("45min", text)
             self.assertIn("no silent gaps", text)
+
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["abandoned", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("declined abandoned", text)
+            self.assertIn("PaymentFailed", text)
+            self.assertIn("walked", text)
+            self.assertNotIn("no declined-abandoned tickets", text)
 
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -114,6 +126,14 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn("no event log", err.getvalue())
 
+    def test_abandoned_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["abandoned", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "day.jsonl"
@@ -140,6 +160,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("concurrent_open", names)
             self.assertIn("payment_failure_cusum", names)
             self.assertIn("payment_failure_ewma", names)
+            self.assertIn("declined_abandoned", names)
             required = {
                 "detector",
                 "score",

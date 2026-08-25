@@ -32,10 +32,16 @@ def ticket_flow(
     *,
     prefix: str,
     fail: bool = False,
+    abandon: bool = False,
+    close_unpaid: bool = False,
     items: list[tuple[str, int]] | None = None,
     dwell: timedelta | None = None,
 ) -> list[Event]:
-    """Minimal open → line(s) → pay → close chain."""
+    """Minimal open → line(s) → pay → close chain.
+
+    fail: decline then capture. abandon: decline and leave the ticket open.
+    close_unpaid: decline then TicketClosed with no capture.
+    """
     rows = items or [("OIL-CONV", total_cents)]
     t = opened
     seq = 0
@@ -64,7 +70,7 @@ def ticket_flow(
             )
         )
     t = t + timedelta(seconds=20)
-    if fail:
+    if fail or abandon or close_unpaid:
         out.append(
             ev(
                 nid(),
@@ -77,6 +83,15 @@ def ticket_flow(
             )
         )
         t = t + timedelta(seconds=10)
+        if abandon:
+            return out
+        if close_unpaid:
+            if dwell is not None:
+                t = opened + dwell
+            out.append(
+                ev(nid(), EventType.TICKET_CLOSED, t, ticket_id, total_cents=running)
+            )
+            return out
     out.append(
         ev(
             nid(),

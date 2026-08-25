@@ -22,6 +22,8 @@ DETECTORS = (
     "velocity",
     "ticket_dwell",
     "concurrent_open",
+    "silent_gap",
+    "declined_abandoned",
 )
 
 

@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, replay tickets, fold hours, or list silent gaps."""
+"""simulate a day, detect anomalies, summarize the log, replay tickets, fold hours, list silent gaps, or list declined walk-offs."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from event_spine.detect import detect
 from event_spine.events import Event, EventType
 from event_spine.project import project
 from event_spine.report import (
+    render_abandoned,
     render_detect,
     render_detect_json,
     render_gaps,
@@ -57,6 +58,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     gps.add_argument("--store", type=Path, default=DEFAULT_STORE)
 
+    abd = sub.add_parser(
+        "abandoned",
+        help="tickets with PaymentFailed and no later PaymentCaptured",
+    )
+    abd.add_argument("--store", type=Path, default=DEFAULT_STORE)
+
     rep = sub.add_parser("replay", help="fold events into tickets and print them")
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
     rep.add_argument("--limit", type=int, default=None)
@@ -72,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         return _hours(args.store)
     if args.cmd == "gaps":
         return _gaps(args.store)
+    if args.cmd == "abandoned":
+        return _abandoned(args.store)
     if args.cmd == "replay":
         return _replay(args.store, args.limit)
     return 2
@@ -134,6 +143,14 @@ def _gaps(path: Path) -> int:
     if not events:
         return 2
     print(render_gaps(events), end="")
+    return 0
+
+
+def _abandoned(path: Path) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    print(render_abandoned(events), end="")
     return 0
 
 

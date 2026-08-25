@@ -1,4 +1,4 @@
-"""Seeded day at Splitrock Lube. Four planted irregularities, then normal noise."""
+"""Seeded day at Splitrock Lube. Five planted irregularities, then normal noise."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ class _Ids:
 
 
 def simulate_day(config: SimConfig | None = None) -> list[Event]:
-    """One shop day. Same seed → same events, including the four plants."""
+    """One shop day. Same seed → same events, including the five plants."""
     cfg = config or SimConfig()
     rng = random.Random(cfg.seed)
     ids = _Ids()
@@ -97,12 +97,14 @@ def simulate_day(config: SimConfig | None = None) -> list[Event]:
     whale_at = clock.replace(hour=14, minute=18, second=0)
     outage_at = clock.replace(hour=16, minute=3, second=0)
     dwell_at = clock.replace(hour=9, minute=42, second=0)
+    walkoff_at = clock.replace(hour=17, minute=22, second=0)
 
     arrivals = _arrivals(rng, clock, close, cfg.mean_gap_s)
     arrivals.extend(fleet_at + timedelta(seconds=12 * i) for i in range(8))
     arrivals.extend(outage_at + timedelta(seconds=50 * i) for i in range(6))
     arrivals.append(whale_at)
     arrivals.append(dwell_at)
+    arrivals.append(walkoff_at)
     arrivals.sort()
     if cfg.silent_gap_hour is not None and cfg.silent_gap_minutes > 0:
         gap_start = clock.replace(
@@ -117,6 +119,7 @@ def simulate_day(config: SimConfig | None = None) -> list[Event]:
     outage_end = outage_at + timedelta(minutes=7)
     whale_used = False
     dwell_used = False
+    walkoff_used = False
 
     for arrival in arrivals:
         if arrival >= close:
@@ -127,6 +130,9 @@ def simulate_day(config: SimConfig | None = None) -> list[Event]:
         is_dwell = arrival == dwell_at and not dwell_used
         if is_dwell:
             dwell_used = True
+        is_walkoff = arrival == walkoff_at and not walkoff_used
+        if is_walkoff:
+            walkoff_used = True
         in_outage = outage_at <= arrival <= outage_end
         ticket_events, clock_end = _one_ticket(
             rng,
@@ -135,6 +141,7 @@ def simulate_day(config: SimConfig | None = None) -> list[Event]:
             whale=is_whale,
             force_fail=in_outage,
             long_dwell=is_dwell,
+            walk_off=is_walkoff,
         )
         events.extend(ticket_events)
         if clock_end > close + timedelta(minutes=40):
@@ -184,6 +191,7 @@ def _one_ticket(
     whale: bool,
     force_fail: bool,
     long_dwell: bool = False,
+    walk_off: bool = False,
 ) -> tuple[list[Event], datetime]:
     ticket_id = ids.ticket()
     t = start
@@ -225,6 +233,26 @@ def _one_ticket(
     # Bay sits on one car for hours. Close is still a fact; the gap is the tell.
     if long_dwell:
         t = t + timedelta(hours=3, minutes=7)
+
+    # Card declined; customer walks. No capture, no close — the ticket sits.
+    if walk_off:
+        method = "card"
+        t = t + timedelta(seconds=rng.randint(8, 25))
+        events.append(
+            Event(
+                event_id=ids.event(),
+                type=EventType.PAYMENT_FAILED,
+                occurred_at=t,
+                ticket_id=ticket_id,
+                payload={
+                    "method": method,
+                    "amount_cents": total,
+                    "attempt": 1,
+                    "reason": "declined",
+                },
+            )
+        )
+        return events, t
 
     # Organic decline ~2.5% on cards. Outage: fail once or twice, then usually capture.
     attempts = 0

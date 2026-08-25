@@ -1,7 +1,8 @@
 # event-spine
 
 A day's worth of a fictional quick-lube shop, stored as events, then
-watched by nine detectors that use actual statistics.
+watched by detectors that use actual statistics — plus a couple of
+rebuilds that just read the log.
 
 Inspired by production event-sourced POS/analytics work. This is not
 that system. It is a small, honest demo of the same shape: append-only
@@ -45,6 +46,8 @@ python -m event_spine detect
 python -m event_spine detect --json
 python -m event_spine stats
 python -m event_spine hours
+python -m event_spine gaps
+python -m event_spine abandoned
 python -m event_spine replay --limit 5
 ```
 
@@ -53,14 +56,14 @@ python -m unittest discover -s tests
 ```
 
 `simulate` is seeded (default 42). Same seed, same day. The generator
-plants four irregularities — a bay that sits on one car for three hours
+plants five irregularities — a bay that sits on one car for three hours
 from 09:42, a fleet dump at 11:30, a whale ticket around 14:18, a
-card-terminal sulk at 16:03 — and the detectors have to find them from
-the log alone.
+card-terminal sulk at 16:03, a declined card at 17:22 whose owner
+walks — and the detectors have to find them from the log alone.
 
 ## Detectors
 
-No model weights. Nine checks with named math:
+No model weights. Named math, plus two log rebuilds:
 
 1. **Ticket total z-score.** After each close, compare the ticket's
    line-item sum to the previous N tickets. Sample standard deviation
@@ -121,6 +124,12 @@ No model weights. Nine checks with named math:
    IQR the same way. Bessel, MAD, and this fence all fire on the
    planted flush ticket.
 
+10. **Declined then abandoned.** Walk each ticket's events. Flag it
+    when there is a `PaymentFailed` and no later `PaymentCaptured` —
+    still open at the end of the log, or `TicketClosed` without a
+    capture after the fail. A decline that later captures is a retry,
+    not a walk-off. Catches the 17:22 plant.
+
 Each anomaly prints the score, the window or ticket, and the event ids
 that justify it. `detect --json` emits the same list as a JSON array.
 
@@ -134,6 +143,17 @@ table — a quiet mid-morning is a fact, not a missing row. Each line is
 tickets opened, payments captured vs failed, revenue from captured
 `amount_cents` (integer cents, printed as dollars), and peak concurrent
 open tickets in that hour, including cars still sitting from earlier.
+
+`abandoned` lists tickets with a `PaymentFailed` and no later
+`PaymentCaptured`. Same rebuild as the declined-abandoned detector;
+the events stay put.
+
+## 2026-08-25
+
+Declined-then-abandoned tickets: rebuild each ticket from the log and
+flag a `PaymentFailed` with no later `PaymentCaptured`. Still-open at
+end of log, or closed unpaid after the fail. The seeded day plants one
+at 17:22; a fail that later captures does not flag.
 
 ## 2026-08-24
 
@@ -176,11 +196,12 @@ event_spine/events.py     fact types + jsonl codec
 event_spine/store.py      append-only store
 event_spine/project.py    fold events → tickets
 event_spine/simulate.py   seeded day generator
-event_spine/detect.py     the nine checks
+event_spine/detect.py     the checks
 event_spine/stats.py      day summary + percentiles
 event_spine/hours.py      hourly fold from the log
+event_spine/gaps.py       shop-hour TicketOpened gaps
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | abandoned | replay
 ```
 
 ## License

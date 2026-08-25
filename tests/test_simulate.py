@@ -63,7 +63,8 @@ class SimulateTests(unittest.TestCase):
         self.assertIn("velocity", names)
         self.assertIn("ticket_dwell", names)
         self.assertIn("concurrent_open", names)
-        floors = {"ticket_total_iqr": 1.5}
+        self.assertIn("declined_abandoned", names)
+        floors = {"ticket_total_iqr": 1.5, "declined_abandoned": 1.0}
         for anomaly in anomalies:
             self.assertGreater(len(anomaly.event_ids), 0)
             self.assertGreaterEqual(anomaly.score, floors.get(anomaly.detector, 2.5))
@@ -71,6 +72,10 @@ class SimulateTests(unittest.TestCase):
         self.assertTrue(open_ids)
         dwell_ids = {a.ticket_id for a in anomalies if a.detector == "ticket_dwell"}
         self.assertTrue(open_ids & dwell_ids)
+        abandoned_ids = {
+            a.ticket_id for a in anomalies if a.detector == "declined_abandoned"
+        }
+        self.assertTrue(open_ids & abandoned_ids)
 
     def test_type_counts_are_sane(self) -> None:
         counts = Counter(e.type for e in simulate_day(SimConfig(seed=42)))
