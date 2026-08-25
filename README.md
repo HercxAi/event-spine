@@ -45,6 +45,7 @@ python -m event_spine detect
 python -m event_spine detect --json
 python -m event_spine stats
 python -m event_spine hours
+python -m event_spine brief
 python -m event_spine replay --limit 5
 ```
 
@@ -147,6 +148,11 @@ open tickets in that hour, including cars still sitting from earlier.
 `TicketOpened`. Shop open and close bound the day; after-hours
 silence is ignored. `detect` flags holes of 45 minutes or longer.
 
+`brief` folds the same log into a one-page daily ops view: tickets
+opened and closed, payments captured vs failed, revenue from captured
+`amount_cents` (integer cents, printed as dollars), leftover still-open
+tickets at the end of the log, and the same detector hit counts.
+
 ## 2026-08-24
 
 Tukey inner fence on ticket totals: score = (x − Q3) / IQR, alarm
@@ -161,6 +167,11 @@ append-only log the same way `hours` is — shop open and close bound the
 day, after-hours silence does not count. `gaps` prints the holes;
 `detect` includes the check. The seeded day is busy enough to stay
 quiet; a planted lunch-rush gap or a dead-register stretch is not.
+
+`brief` rebuilds a one-page daily ops view from the append-only JSONL —
+opens and closes, captured vs failed payments, captured revenue,
+leftover still-open tickets, and detector hit counts. Run
+`python -m event_spine brief`.
 
 ## 2026-08-21
 
@@ -199,8 +210,9 @@ event_spine/detect.py     the ten checks
 event_spine/stats.py      day summary + percentiles
 event_spine/hours.py      hourly fold from the log
 event_spine/gaps.py       shop-hour TicketOpened gaps
+event_spine/brief.py      daily ops brief from the log
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | replay
 ```
 
 ## License
