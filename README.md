@@ -145,6 +145,7 @@ table — a quiet mid-morning is a fact, not a missing row. Each line is
 tickets opened, payments captured vs failed, revenue from captured
 `amount_cents` (integer cents, printed as dollars), and peak concurrent
 open tickets in that hour, including cars still sitting from earlier.
+`hours --json` emits the same fold as a JSON object (cents stay ints).
 
 `gaps` folds the same log into the shop-hour stretches with no
 `TicketOpened`. Shop open and close bound the day; after-hours
@@ -162,6 +163,10 @@ tickets at the end of the log, and the same detector hit counts.
 JSON object — shop, day, ticket counts, fail rate, Hyndman-Fan p50/p95
 dwell in minutes, and detector hit counts. Pipe it instead of scraping
 stdout. Run `python -m event_spine stats --json`.
+
+`hours --json` is the same hourly table as a JSON object — one row
+per shop-open hour, plus any hour that actually has events. Revenue
+stays integer cents. Run `python -m event_spine hours --json`.
 
 ## 2026-08-25
 

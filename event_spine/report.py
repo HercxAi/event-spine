@@ -227,6 +227,35 @@ def render_hours(events: list[Event], bins: list[HourBin] | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_hours_json(events: list[Event], bins: list[HourBin] | None = None) -> str:
+    """JSON object for the hourly fold. Human stdout stays the default."""
+    if bins is None:
+        bins = by_hour(events)
+    if events:
+        day = events[0].occurred_at.date().isoformat()
+    elif bins:
+        day = bins[0].hour.date().isoformat()
+    else:
+        day = None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "hours": [
+            {
+                "hour": row.hour.isoformat(),
+                "tickets_opened": row.tickets_opened,
+                "payments_captured": row.payments_captured,
+                "payments_failed": row.payments_failed,
+                "revenue_cents": row.revenue_cents,
+                "peak_open": row.peak_open,
+            }
+            for row in bins
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
 def render_gaps(events: list[Event], anomalies: list[Anomaly] | None = None) -> str:
     """Silent shop-hour stretches with no TicketOpened, rebuilt from the log."""
     if anomalies is None:

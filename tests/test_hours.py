@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from event_spine.detect import fmt_cents
 from event_spine.events import Event, EventType
 from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR, HourBin, by_hour
-from event_spine.report import render_hours
+from event_spine.report import render_hours, render_hours_json
 from event_spine.simulate import SimConfig, simulate_day
 from tests.helpers import at, ev, ticket_flow
 
@@ -187,3 +188,21 @@ class HourFoldTests(unittest.TestCase):
         before = [e.to_dict() for e in events]
         by_hour(events)
         self.assertEqual([e.to_dict() for e in events], before)
+
+
+class HoursJsonTests(unittest.TestCase):
+    def test_render_hours_json_matches_fold(self) -> None:
+        events = ticket_flow("t_1", at(8), 12997, prefix="r")
+        bins = by_hour(events)
+        payload = json.loads(render_hours_json(events, bins))
+        self.assertEqual(payload["events"], len(events))
+        self.assertEqual(len(payload["hours"]), len(bins))
+        by_iso = {row["hour"]: row for row in payload["hours"]}
+        for row in bins:
+            got = by_iso[row.hour.isoformat()]
+            self.assertEqual(got["tickets_opened"], row.tickets_opened)
+            self.assertEqual(got["payments_captured"], row.payments_captured)
+            self.assertEqual(got["payments_failed"], row.payments_failed)
+            self.assertEqual(got["revenue_cents"], row.revenue_cents)
+            self.assertEqual(got["peak_open"], row.peak_open)
+        self.assertEqual(sum(r["revenue_cents"] for r in payload["hours"]), 12997)

@@ -17,6 +17,7 @@ from event_spine.report import (
     render_detect_json,
     render_gaps,
     render_hours,
+    render_hours_json,
     render_replay,
     render_stats,
     render_stats_json,
@@ -59,6 +60,12 @@ def main(argv: list[str] | None = None) -> int:
 
     hrs = sub.add_parser("hours", help="hourly tickets, payments, and revenue from the log")
     hrs.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    hrs.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the hourly fold as a JSON object",
+    )
 
     br = sub.add_parser("brief", help="one-page daily ops brief rebuilt from the log")
     br.add_argument("--store", type=Path, default=DEFAULT_STORE)
@@ -87,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "stats":
         return _stats(args.store, args.as_json)
     if args.cmd == "hours":
-        return _hours(args.store)
+        return _hours(args.store, args.as_json)
     if args.cmd == "brief":
         return _brief(args.store, args.as_json)
     if args.cmd == "gaps":
@@ -144,11 +151,14 @@ def _stats(path: Path, as_json: bool = False) -> int:
     return 0
 
 
-def _hours(path: Path) -> int:
+def _hours(path: Path, as_json: bool = False) -> int:
     events = _load(path)
     if not events:
         return 2
-    print(render_hours(events), end="")
+    if as_json:
+        print(render_hours_json(events), end="")
+    else:
+        print(render_hours(events), end="")
     return 0
 
 

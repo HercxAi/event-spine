@@ -162,6 +162,33 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn("no event log", err.getvalue())
 
+    def test_hours_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["hours", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("hours", payload)
+            self.assertGreater(len(payload["hours"]), 0)
+            first = payload["hours"][0]
+            for key in (
+                "hour",
+                "tickets_opened",
+                "payments_captured",
+                "payments_failed",
+                "revenue_cents",
+                "peak_open",
+            ):
+                self.assertIn(key, first)
+            self.assertTrue(first["hour"].endswith("+00:00") or "T" in first["hour"])
+            self.assertGreaterEqual(sum(row["tickets_opened"] for row in payload["hours"]), 1)
+
     def test_brief_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
