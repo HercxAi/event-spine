@@ -150,6 +150,8 @@ open tickets in that hour, including cars still sitting from earlier.
 `gaps` folds the same log into the shop-hour stretches with no
 `TicketOpened`. Shop open and close bound the day; after-hours
 silence is ignored. `detect` flags holes of 45 minutes or longer.
+`gaps --json` emits the same fold as a JSON object (threshold and
+each gap stay structured; no scraping the numbered list).
 
 `brief` folds the same log into a one-page daily ops view: tickets
 opened and closed, payments captured vs failed, revenue from captured
@@ -167,6 +169,10 @@ stdout. Run `python -m event_spine stats --json`.
 `hours --json` is the same hourly table as a JSON object — one row
 per shop-open hour, plus any hour that actually has events. Revenue
 stays integer cents. Run `python -m event_spine hours --json`.
+
+`gaps --json` is the silent-gap list as a JSON object — shop, day,
+45-minute threshold, shop-open window, and each hole with the same
+fields as `detect --json`. Run `python -m event_spine gaps --json`.
 
 ## 2026-08-25
 

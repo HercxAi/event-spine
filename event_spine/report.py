@@ -183,22 +183,7 @@ def render_brief_json(events: list[Event], brief: DayBrief | None = None) -> str
 
 def render_detect_json(anomalies: list[Anomaly]) -> str:
     """JSON array of anomalies. Human stdout stays the default elsewhere."""
-
-    def row(a: Anomaly) -> dict[str, Any]:
-        score: float | str = a.score
-        if not math.isfinite(a.score):
-            score = "Infinity" if a.score > 0 else "-Infinity"
-        return {
-            "detector": a.detector,
-            "score": score,
-            "at": a.at.isoformat(),
-            "summary": a.summary,
-            "event_ids": list(a.event_ids),
-            "ticket_id": a.ticket_id,
-            "details": a.details,
-        }
-
-    return json.dumps([row(a) for a in anomalies], indent=2) + "\n"
+    return json.dumps([_anomaly_row(a) for a in anomalies], indent=2) + "\n"
 
 
 def render_hours(events: list[Event], bins: list[HourBin] | None = None) -> str:
@@ -284,6 +269,41 @@ def render_gaps(events: list[Event], anomalies: list[Anomaly] | None = None) -> 
         if i != len(anomalies):
             lines.append("")
     return "\n".join(lines) + "\n"
+
+
+def _anomaly_row(a: Anomaly) -> dict[str, Any]:
+    score: float | str = a.score
+    if not math.isfinite(a.score):
+        score = "Infinity" if a.score > 0 else "-Infinity"
+    return {
+        "detector": a.detector,
+        "score": score,
+        "at": a.at.isoformat(),
+        "summary": a.summary,
+        "event_ids": list(a.event_ids),
+        "ticket_id": a.ticket_id,
+        "details": a.details,
+    }
+
+
+def render_gaps_json(events: list[Event], anomalies: list[Anomaly] | None = None) -> str:
+    """JSON object for the silent-gap fold. Human stdout stays the default."""
+    if anomalies is None:
+        anomalies = detect_silent_gap(events)
+    if events:
+        day = events[0].occurred_at.date().isoformat()
+    else:
+        day = None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "threshold_minutes": SILENT_GAP_MINUTES,
+        "shop_open": SHOP_OPEN_HOUR,
+        "shop_close": SHOP_CLOSE_HOUR,
+        "gaps": [_anomaly_row(a) for a in anomalies],
+    }
+    return json.dumps(payload, indent=2) + "\n"
 
 
 def render_replay(tickets: dict[str, Ticket], *, limit: int | None = None) -> str:

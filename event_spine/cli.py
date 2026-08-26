@@ -16,6 +16,7 @@ from event_spine.report import (
     render_detect,
     render_detect_json,
     render_gaps,
+    render_gaps_json,
     render_hours,
     render_hours_json,
     render_replay,
@@ -81,6 +82,12 @@ def main(argv: list[str] | None = None) -> int:
         help="shop-hour stretches with no TicketOpened longer than 45 minutes",
     )
     gps.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    gps.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the silent-gap fold as a JSON object",
+    )
 
     rep = sub.add_parser("replay", help="fold events into tickets and print them")
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
@@ -98,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "brief":
         return _brief(args.store, args.as_json)
     if args.cmd == "gaps":
-        return _gaps(args.store)
+        return _gaps(args.store, args.as_json)
     if args.cmd == "replay":
         return _replay(args.store, args.limit)
     return 2
@@ -173,11 +180,14 @@ def _brief(path: Path, as_json: bool = False) -> int:
     return 0
 
 
-def _gaps(path: Path) -> int:
+def _gaps(path: Path, as_json: bool = False) -> int:
     events = _load(path)
     if not events:
         return 2
-    print(render_gaps(events), end="")
+    if as_json:
+        print(render_gaps_json(events), end="")
+    else:
+        print(render_gaps(events), end="")
     return 0
 
 

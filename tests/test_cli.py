@@ -214,6 +214,42 @@ class CliTests(unittest.TestCase):
             self.assertIn("revenue $0.00", text)
             self.assertIn("detector hits", text)
 
+    def test_gaps_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            events = simulate_day(
+                SimConfig(
+                    seed=42,
+                    silent_gap_hour=12,
+                    silent_gap_minute=10,
+                    silent_gap_minutes=50,
+                )
+            )
+            JsonlEventStore(path).append_many(events)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["gaps", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("gaps", payload)
+            self.assertGreaterEqual(len(payload["gaps"]), 1)
+            self.assertEqual(payload["threshold_minutes"], 45)
+            first = payload["gaps"][0]
+            for key in (
+                "detector",
+                "score",
+                "at",
+                "summary",
+                "event_ids",
+                "ticket_id",
+                "details",
+            ):
+                self.assertIn(key, first)
+            self.assertEqual(first["detector"], "silent_gap")
+            self.assertTrue(first["at"].endswith("+00:00") or "T" in first["at"])
+
     def test_gaps_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
