@@ -47,6 +47,7 @@ python -m event_spine stats
 python -m event_spine hours
 python -m event_spine brief
 python -m event_spine replay --limit 5
+python -m event_spine replay --json --limit 5
 ```
 
 ```bash
@@ -173,6 +174,10 @@ stays integer cents. Run `python -m event_spine hours --json`.
 `gaps --json` is the silent-gap list as a JSON object — shop, day,
 45-minute threshold, shop-open window, and each hole with the same
 fields as `detect --json`. Run `python -m event_spine gaps --json`.
+
+`replay --json` is the ticket projection as a JSON object — shop,
+day, and each ticket with line items and payments (cents stay ints).
+`--limit` still caps the list. Run `python -m event_spine replay --json`.
 
 ## 2026-08-25
 

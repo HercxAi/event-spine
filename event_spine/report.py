@@ -330,3 +330,65 @@ def render_replay(tickets: dict[str, Ticket], *, limit: int | None = None) -> st
             )
         lines.append("")
     return "\n".join(lines)
+
+
+def render_replay_json(
+    tickets: dict[str, Ticket],
+    *,
+    events: list[Event] | None = None,
+    limit: int | None = None,
+) -> str:
+    """JSON object for the ticket projection. Human stdout stays the default."""
+    ordered = sorted(tickets.values(), key=lambda tk: (tk.opened_at, tk.ticket_id))
+    if limit is not None:
+        ordered = ordered[:limit]
+    if events:
+        day = events[0].occurred_at.date().isoformat()
+        n_events = len(events)
+    elif ordered:
+        day = ordered[0].opened_at.date().isoformat()
+        n_events = None
+    else:
+        day = None
+        n_events = 0 if events is not None else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": n_events,
+        "tickets": [
+            {
+                "ticket_id": ticket.ticket_id,
+                "opened_at": ticket.opened_at.isoformat(),
+                "closed_at": ticket.closed_at.isoformat() if ticket.closed_at else None,
+                "bay": ticket.bay or None,
+                "vehicle": ticket.vehicle,
+                "total_cents": ticket.total_cents,
+                "paid": ticket.paid,
+                "closed": ticket.closed,
+                "items": [
+                    {
+                        "sku": item.sku,
+                        "description": item.description,
+                        "qty": item.qty,
+                        "unit_cents": item.unit_cents,
+                        "ext_cents": item.ext_cents,
+                    }
+                    for item in ticket.items
+                ],
+                "payments": [
+                    {
+                        "ok": payment.ok,
+                        "method": payment.method,
+                        "amount_cents": payment.amount_cents,
+                        "at": payment.at.isoformat(),
+                        "event_id": payment.event_id,
+                        "reason": payment.reason,
+                    }
+                    for payment in ticket.payments
+                ],
+            }
+            for ticket in ordered
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+

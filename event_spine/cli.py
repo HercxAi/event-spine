@@ -20,6 +20,7 @@ from event_spine.report import (
     render_hours,
     render_hours_json,
     render_replay,
+    render_replay_json,
     render_stats,
     render_stats_json,
 )
@@ -92,6 +93,12 @@ def main(argv: list[str] | None = None) -> int:
     rep = sub.add_parser("replay", help="fold events into tickets and print them")
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
     rep.add_argument("--limit", type=int, default=None)
+    rep.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the ticket projection as a JSON object",
+    )
 
     args = parser.parse_args(argv)
     if args.cmd == "simulate":
@@ -107,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "gaps":
         return _gaps(args.store, args.as_json)
     if args.cmd == "replay":
-        return _replay(args.store, args.limit)
+        return _replay(args.store, args.limit, args.as_json)
     return 2
 
 
@@ -191,9 +198,13 @@ def _gaps(path: Path, as_json: bool = False) -> int:
     return 0
 
 
-def _replay(path: Path, limit: int | None) -> int:
+def _replay(path: Path, limit: int | None, as_json: bool = False) -> int:
     events = _load(path)
     if not events:
         return 2
-    print(render_replay(project(events), limit=limit), end="")
+    tickets = project(events)
+    if as_json:
+        print(render_replay_json(tickets, events=events, limit=limit), end="")
+    else:
+        print(render_replay(tickets, limit=limit), end="")
     return 0

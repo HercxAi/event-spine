@@ -371,3 +371,43 @@ class CliTests(unittest.TestCase):
                 code = main(["detect", "--store", str(path)])
             self.assertEqual(code, 0)
             self.assertIn("silent_gap", out.getvalue())
+
+    def test_replay_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["replay", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("tickets", payload)
+            self.assertGreater(len(payload["tickets"]), 0)
+            first = payload["tickets"][0]
+            for key in (
+                "ticket_id",
+                "opened_at",
+                "closed_at",
+                "bay",
+                "vehicle",
+                "total_cents",
+                "paid",
+                "closed",
+                "items",
+                "payments",
+            ):
+                self.assertIn(key, first)
+            self.assertIsInstance(first["items"], list)
+            self.assertIsInstance(first["payments"], list)
+            self.assertIsInstance(first["total_cents"], int)
+            ids = [row["ticket_id"] for row in payload["tickets"]]
+            self.assertIn("t_001", ids)
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["replay", "--store", str(path), "--json", "--limit", "3"])
+            self.assertEqual(code, 0)
+            limited = json.loads(out.getvalue())
+            self.assertEqual(len(limited["tickets"]), 3)
+
