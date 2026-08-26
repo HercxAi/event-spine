@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import timedelta
 
 from event_spine.detect import detect
 from event_spine.events import Event, EventType
 from event_spine.simulate import SimConfig, simulate_day
+from event_spine.report import render_stats_json
 from event_spine.stats import dwell_minutes, percentile, summarize
 from tests.helpers import at, ev, ticket_flow
 
@@ -118,3 +120,24 @@ class SummarizeTests(unittest.TestCase):
         self.assertGreater(by_name["payment_failure_ewma"], 0)
         self.assertGreater(by_name["velocity"], 0)
         self.assertGreater(by_name["concurrent_open"], 0)
+
+
+class StatsJsonTests(unittest.TestCase):
+    def test_render_stats_json_matches_fold(self) -> None:
+        events = [
+            *ticket_flow("t_a", at(8), 7000, prefix="a", dwell=timedelta(minutes=10)),
+            *ticket_flow("t_b", at(9), 7000, prefix="b", dwell=timedelta(minutes=20)),
+        ]
+        stats = summarize(events)
+        payload = json.loads(render_stats_json(events, stats))
+        self.assertEqual(payload["tickets"], stats.tickets)
+        self.assertEqual(payload["closed"], stats.closed)
+        self.assertEqual(payload["failures"], stats.failures)
+        self.assertEqual(payload["payments"], stats.payments)
+        self.assertAlmostEqual(payload["fail_rate"], stats.fail_rate)
+        self.assertAlmostEqual(payload["dwell_p50_min"], stats.dwell_p50_min)
+        self.assertAlmostEqual(payload["dwell_p95_min"], stats.dwell_p95_min)
+        self.assertEqual(
+            {row["detector"]: row["count"] for row in payload["detector_hits"]},
+            dict(stats.detector_hits),
+        )

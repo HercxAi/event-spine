@@ -19,6 +19,7 @@ from event_spine.report import (
     render_hours,
     render_replay,
     render_stats,
+    render_stats_json,
 )
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
@@ -49,6 +50,12 @@ def main(argv: list[str] | None = None) -> int:
 
     st = sub.add_parser("stats", help="ticket count, fail rate, dwell percentiles, detector hits")
     st.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    st.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the summary as a JSON object",
+    )
 
     hrs = sub.add_parser("hours", help="hourly tickets, payments, and revenue from the log")
     hrs.add_argument("--store", type=Path, default=DEFAULT_STORE)
@@ -78,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "detect":
         return _detect(args.store, args.as_json)
     if args.cmd == "stats":
-        return _stats(args.store)
+        return _stats(args.store, args.as_json)
     if args.cmd == "hours":
         return _hours(args.store)
     if args.cmd == "brief":
@@ -126,11 +133,14 @@ def _detect(path: Path, as_json: bool = False) -> int:
     return 0
 
 
-def _stats(path: Path) -> int:
+def _stats(path: Path, as_json: bool = False) -> int:
     events = _load(path)
     if not events:
         return 2
-    print(render_stats(events), end="")
+    if as_json:
+        print(render_stats_json(events), end="")
+    else:
+        print(render_stats(events), end="")
     return 0
 
 

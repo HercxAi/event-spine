@@ -136,6 +136,8 @@ that justify it. `detect --json` emits the same list as a JSON array.
 `stats` folds the same log into a one-screen summary: ticket count,
 payment-failure rate, p50/p95 dwell (linear interpolation, Hyndman-Fan
 type 7), and how many times each detector fired.
+`stats --json` emits the same fold as a JSON object (dwell minutes stay
+floats; fail_rate is a 0–1 fraction).
 
 `hours` folds the same log into one line per shop-open hour (07:00–18:00
 UTC, plus any hour that actually has events). Empty hours stay in the
@@ -153,6 +155,13 @@ opened and closed, payments captured vs failed, revenue from captured
 `amount_cents` (integer cents, printed as dollars), leftover still-open
 tickets at the end of the log, and the same detector hit counts.
 `brief --json` emits the same fold as a JSON object (cents stay ints).
+
+## 2026-08-26
+
+`stats --json`: same day summary as the human `stats` screen, as a
+JSON object — shop, day, ticket counts, fail rate, Hyndman-Fan p50/p95
+dwell in minutes, and detector hit counts. Pipe it instead of scraping
+stdout. Run `python -m event_spine stats --json`.
 
 ## 2026-08-25
 

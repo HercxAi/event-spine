@@ -119,6 +119,41 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn("no event log", err.getvalue())
 
+    def test_stats_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["stats", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            for key in (
+                "shop",
+                "day",
+                "events",
+                "tickets",
+                "closed",
+                "payments",
+                "failures",
+                "fail_rate",
+                "dwell_p50_min",
+                "dwell_p95_min",
+                "detector_hits",
+            ):
+                self.assertIn(key, payload)
+            self.assertGreater(payload["tickets"], 0)
+            self.assertGreaterEqual(payload["fail_rate"], 0.0)
+            self.assertIsInstance(payload["dwell_p50_min"], float)
+            names = {row["detector"] for row in payload["detector_hits"]}
+            self.assertIn("silent_gap", names)
+            self.assertIn("ticket_dwell", names)
+            for row in payload["detector_hits"]:
+                self.assertEqual({"detector", "count"}, set(row.keys()))
+
     def test_hours_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"

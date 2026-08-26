@@ -93,6 +93,29 @@ def render_stats(events: list[Event], stats: DayStats | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_stats_json(events: list[Event], stats: DayStats | None = None) -> str:
+    """JSON object for the day summary. Human stdout stays the default."""
+    if stats is None:
+        stats = summarize(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": stats.events,
+        "tickets": stats.tickets,
+        "closed": stats.closed,
+        "payments": stats.payments,
+        "failures": stats.failures,
+        "fail_rate": stats.fail_rate,
+        "dwell_p50_min": stats.dwell_p50_min,
+        "dwell_p95_min": stats.dwell_p95_min,
+        "detector_hits": [
+            {"detector": name, "count": count} for name, count in stats.detector_hits
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
 def render_brief(events: list[Event], brief: DayBrief | None = None) -> str:
     """One-page daily ops view rebuilt from the log."""
     if brief is None:
