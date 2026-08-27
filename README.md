@@ -46,6 +46,8 @@ python -m event_spine detect --json
 python -m event_spine stats
 python -m event_spine hours
 python -m event_spine brief
+python -m event_spine sku
+python -m event_spine sku --json
 python -m event_spine replay --limit 5
 python -m event_spine replay --json --limit 5
 ```
@@ -162,6 +164,19 @@ opened and closed, payments captured vs failed, revenue from captured
 tickets at the end of the log, and the same detector hit counts.
 `brief --json` emits the same fold as a JSON object (cents stay ints).
 
+`sku` folds the same log into one row per catalog code from
+`LineItemAdded`: line count, qty sum, and ext cents (qty × unit_cents).
+Sorted highest ext first. `sku --json` emits the same fold as a JSON
+object (cents stay ints).
+
+## 2026-08-27
+
+`sku` rebuilds the day's menu mix from `LineItemAdded` alone — no
+ticket projection required. Whale SKUs (`TRN-FLUSH`, `DIFF-FLUID`,
+`BRK-FLUSH`) show up next to the oil-change baseline. Human screen
+prints dollars; `--json` keeps cents as numbers. Run
+`python -m event_spine sku` or `python -m event_spine sku --json`.
+
 ## 2026-08-26
 
 `stats --json`: same day summary as the human `stats` screen, as a
@@ -251,8 +266,9 @@ event_spine/stats.py      day summary + percentiles
 event_spine/hours.py      hourly fold from the log
 event_spine/gaps.py       shop-hour TicketOpened gaps
 event_spine/brief.py      daily ops brief from the log
+event_spine/sku.py        SKU fold from LineItemAdded
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | replay
 ```
 
 ## License

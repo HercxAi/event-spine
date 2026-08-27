@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, or list silent gaps."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, or fold SKUs."""
 
 from __future__ import annotations
 
@@ -21,6 +21,8 @@ from event_spine.report import (
     render_hours_json,
     render_replay,
     render_replay_json,
+    render_sku,
+    render_sku_json,
     render_stats,
     render_stats_json,
 )
@@ -90,6 +92,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the silent-gap fold as a JSON object",
     )
 
+    sk = sub.add_parser(
+        "sku",
+        help="SKU lines, qty, and ext cents rebuilt from LineItemAdded",
+    )
+    sk.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    sk.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the SKU fold as a JSON object",
+    )
+
     rep = sub.add_parser("replay", help="fold events into tickets and print them")
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
     rep.add_argument("--limit", type=int, default=None)
@@ -113,6 +127,8 @@ def main(argv: list[str] | None = None) -> int:
         return _brief(args.store, args.as_json)
     if args.cmd == "gaps":
         return _gaps(args.store, args.as_json)
+    if args.cmd == "sku":
+        return _sku(args.store, args.as_json)
     if args.cmd == "replay":
         return _replay(args.store, args.limit, args.as_json)
     return 2
@@ -195,6 +211,17 @@ def _gaps(path: Path, as_json: bool = False) -> int:
         print(render_gaps_json(events), end="")
     else:
         print(render_gaps(events), end="")
+    return 0
+
+
+def _sku(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_sku_json(events), end="")
+    else:
+        print(render_sku(events), end="")
     return 0
 
 

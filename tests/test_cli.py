@@ -103,6 +103,17 @@ class CliTests(unittest.TestCase):
             self.assertIn("45min", text)
             self.assertIn("no silent gaps", text)
 
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["sku", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("sku", text)
+            self.assertIn("FIL-OIL", text)
+            self.assertIn("units", text)
+            self.assertIn("ext $", text)
+
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
@@ -259,6 +270,34 @@ class CliTests(unittest.TestCase):
                 code = main(["gaps", "--store", str(missing)])
             self.assertEqual(code, 2)
             self.assertIn("no event log", err.getvalue())
+
+    def test_sku_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["sku", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_sku_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["sku", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("skus", payload)
+            self.assertGreater(len(payload["skus"]), 0)
+            first = payload["skus"][0]
+            for key in ("sku", "description", "lines", "qty", "ext_cents"):
+                self.assertIn(key, first)
+            self.assertGreaterEqual(sum(row["qty"] for row in payload["skus"]), 1)
+            self.assertGreaterEqual(sum(row["ext_cents"] for row in payload["skus"]), 0)
 
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:

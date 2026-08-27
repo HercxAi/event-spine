@@ -11,6 +11,7 @@ from event_spine.detect import SILENT_GAP_MINUTES, Anomaly, detect, detect_silen
 from event_spine.events import Event, EventType
 from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR, HourBin, by_hour
 from event_spine.project import Ticket, project
+from event_spine.sku import SkuRow, by_sku
 from event_spine.simulate import SHOP
 from event_spine.stats import DayStats, summarize
 
@@ -246,6 +247,53 @@ def render_hours_json(events: list[Event], bins: list[HourBin] | None = None) ->
                 "peak_open": row.peak_open,
             }
             for row in bins
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def render_sku(events: list[Event], rows: list[SkuRow] | None = None) -> str:
+    """One line per SKU rebuilt from LineItemAdded, highest ext_cents first."""
+    if rows is None:
+        rows = by_sku(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_ext = sum(row.ext_cents for row in rows)
+    total_qty = sum(row.qty for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  sku",
+        f"{len(rows)} skus  ·  {total_qty} units  ·  ext {fmt_cents(total_ext)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no line items")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        lines.append(
+            f"{row.sku:<12} {row.description:<28} "
+            f"lines {row.lines:<3} qty {row.qty:<4} "
+            f"{fmt_cents(row.ext_cents):>10}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_sku_json(events: list[Event], rows: list[SkuRow] | None = None) -> str:
+    """JSON object for the SKU fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_sku(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "skus": [
+            {
+                "sku": row.sku,
+                "description": row.description,
+                "lines": row.lines,
+                "qty": row.qty,
+                "ext_cents": row.ext_cents,
+            }
+            for row in rows
         ],
     }
     return json.dumps(payload, indent=2) + "\n"
