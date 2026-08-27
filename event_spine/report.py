@@ -13,6 +13,7 @@ from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR, HourBin, by_hour
 from event_spine.project import Ticket, project
 from event_spine.bay import BayRow, by_bay
 from event_spine.pay import PayRow, by_method
+from event_spine.reason import ReasonRow, by_reason
 from event_spine.sku import SkuRow, by_sku
 from event_spine.simulate import SHOP
 from event_spine.stats import DayStats, summarize
@@ -305,6 +306,52 @@ def render_bay_json(events: list[Event], rows: list[BayRow] | None = None) -> st
     }
     return json.dumps(payload, indent=2) + "\n"
 
+
+
+def render_reason(events: list[Event], rows: list[ReasonRow] | None = None) -> str:
+    """One line per PaymentFailed reason, most fails first."""
+    if rows is None:
+        rows = by_reason(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_fails = sum(row.fails for row in rows)
+    total_ask = sum(row.ask_cents for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  reason",
+        f"{len(rows)} reasons  ·  {total_fails} fails  ·  ask {fmt_cents(total_ask)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no payment failures")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        tender = ",".join(row.methods) if row.methods else "—"
+        lines.append(
+            f"{row.reason:<12} fails {row.fails:<3} "
+            f"ask {fmt_cents(row.ask_cents):>10}  via {tender}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_reason_json(events: list[Event], rows: list[ReasonRow] | None = None) -> str:
+    """JSON object for the failure-reason fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_reason(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "reasons": [
+            {
+                "reason": row.reason,
+                "fails": row.fails,
+                "ask_cents": row.ask_cents,
+                "methods": list(row.methods),
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
 
 def render_pay(events: list[Event], rows: list[PayRow] | None = None) -> str:
     """One line per payment method rebuilt from payment events, highest captured first."""

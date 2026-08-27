@@ -52,6 +52,8 @@ python -m event_spine bay
 python -m event_spine bay --json
 python -m event_spine pay
 python -m event_spine pay --json
+python -m event_spine reason
+python -m event_spine reason --json
 python -m event_spine replay --limit 5
 python -m event_spine replay --json --limit 5
 ```
@@ -186,6 +188,11 @@ captured cents, and fail rate. Cash stays off the card-terminal
 sulk. Sorted highest captured first. `pay --json` emits the same
 fold as a JSON object (cents stay ints; fail_rate is a 0–1 fraction).
 
+`reason` folds the same log into one row per `PaymentFailed` reason:
+fail count, ask cents, and which tenders saw it. Sorted most fails
+first. `reason --json` emits the same fold as a JSON object (cents
+stay ints).
+
 ## 2026-08-27
 
 `sku` rebuilds the day's menu mix from `LineItemAdded` alone — no
@@ -205,6 +212,11 @@ carries the planted 16:03 declines; cash does not. Captured cents
 are the same revenue hours uses. Human screen prints dollars;
 `--json` keeps cents as numbers. Run
 `python -m event_spine pay` or `python -m event_spine pay --json`.
+
+`reason` rebuilds the fail mix from `PaymentFailed` alone — on the
+seeded day that is network on card, ask dollars matching the
+declined tickets. Run
+`python -m event_spine reason` or `python -m event_spine reason --json`.
 
 ## 2026-08-26
 
@@ -299,7 +311,7 @@ event_spine/sku.py        SKU fold from LineItemAdded
 event_spine/bay.py        per-bay tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | pay | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | pay | reason | replay
 ```
 
 ## License

@@ -23,6 +23,8 @@ from event_spine.report import (
     render_hours_json,
     render_pay,
     render_pay_json,
+    render_reason,
+    render_reason_json,
     render_replay,
     render_replay_json,
     render_sku,
@@ -120,6 +122,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the bay fold as a JSON object",
     )
 
+
+    rs = sub.add_parser(
+        "reason",
+        help="PaymentFailed reasons, ask cents, and methods rebuilt from the log",
+    )
+    rs.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    rs.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the failure-reason fold as a JSON object",
+    )
     py = sub.add_parser(
         "pay",
         help="per-method captured vs failed rebuilt from payment events",
@@ -159,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
         return _sku(args.store, args.as_json)
     if args.cmd == "bay":
         return _bay(args.store, args.as_json)
+    if args.cmd == "reason":
+        return _reason(args.store, args.as_json)
     if args.cmd == "pay":
         return _pay(args.store, args.as_json)
     if args.cmd == "replay":
@@ -267,6 +283,17 @@ def _bay(path: Path, as_json: bool = False) -> int:
         print(render_bay(events), end="")
     return 0
 
+
+
+def _reason(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_reason_json(events), end="")
+    else:
+        print(render_reason(events), end="")
+    return 0
 
 def _pay(path: Path, as_json: bool = False) -> int:
     events = _load(path)
