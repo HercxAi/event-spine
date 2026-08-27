@@ -12,6 +12,7 @@ from event_spine.events import Event, EventType
 from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR, HourBin, by_hour
 from event_spine.project import Ticket, project
 from event_spine.bay import BayRow, by_bay
+from event_spine.pay import PayRow, by_method
 from event_spine.sku import SkuRow, by_sku
 from event_spine.simulate import SHOP
 from event_spine.stats import DayStats, summarize
@@ -298,6 +299,59 @@ def render_bay_json(events: list[Event], rows: list[BayRow] | None = None) -> st
                 "open": row.open,
                 "revenue_cents": row.revenue_cents,
                 "dwell_p50_min": row.dwell_p50_min,
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def render_pay(events: list[Event], rows: list[PayRow] | None = None) -> str:
+    """One line per payment method rebuilt from payment events, highest captured first."""
+    if rows is None:
+        rows = by_method(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_cap = sum(row.captured for row in rows)
+    total_fail = sum(row.failed for row in rows)
+    total_cents = sum(row.captured_cents for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  pay",
+        (
+            f"{len(rows)} methods  ·  {total_cap} captured  ·  "
+            f"{total_fail} failed  ·  cap {fmt_cents(total_cents)}"
+        ),
+        "",
+    ]
+    if not rows:
+        lines.append("no payments")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        label = row.method or "?"
+        lines.append(
+            f"{label:<8} captured {row.captured:<3} failed {row.failed:<3} "
+            f"fail {row.fail_rate:>5.1%}  {fmt_cents(row.captured_cents):>10}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_pay_json(events: list[Event], rows: list[PayRow] | None = None) -> str:
+    """JSON object for the payment-method fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_method(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "methods": [
+            {
+                "method": row.method,
+                "captured": row.captured,
+                "failed": row.failed,
+                "attempts": row.attempts,
+                "captured_cents": row.captured_cents,
+                "failed_cents": row.failed_cents,
+                "fail_rate": row.fail_rate,
             }
             for row in rows
         ],

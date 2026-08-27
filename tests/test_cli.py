@@ -125,6 +125,18 @@ class CliTests(unittest.TestCase):
             self.assertIn("tickets", text)
             self.assertIn("rev $", text)
 
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["pay", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("pay", text)
+            self.assertIn("methods", text)
+            self.assertIn("card", text)
+            self.assertIn("captured", text)
+            self.assertIn("failed", text)
+
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
@@ -337,6 +349,44 @@ class CliTests(unittest.TestCase):
                 self.assertIn(key, first)
             self.assertGreaterEqual(sum(row["tickets"] for row in payload["bays"]), 1)
             self.assertGreaterEqual(sum(row["revenue_cents"] for row in payload["bays"]), 0)
+
+    def test_pay_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["pay", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_pay_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["pay", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("methods", payload)
+            self.assertGreater(len(payload["methods"]), 0)
+            first = payload["methods"][0]
+            for key in (
+                "method",
+                "captured",
+                "failed",
+                "attempts",
+                "captured_cents",
+                "failed_cents",
+                "fail_rate",
+            ):
+                self.assertIn(key, first)
+            names = {row["method"] for row in payload["methods"]}
+            self.assertIn("card", names)
+            self.assertGreaterEqual(sum(row["captured"] for row in payload["methods"]), 1)
+            self.assertGreaterEqual(sum(row["captured_cents"] for row in payload["methods"]), 0)
 
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:

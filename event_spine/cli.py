@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, or fold bays."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -21,6 +21,8 @@ from event_spine.report import (
     render_gaps_json,
     render_hours,
     render_hours_json,
+    render_pay,
+    render_pay_json,
     render_replay,
     render_replay_json,
     render_sku,
@@ -118,6 +120,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the bay fold as a JSON object",
     )
 
+    py = sub.add_parser(
+        "pay",
+        help="per-method captured vs failed rebuilt from payment events",
+    )
+    py.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    py.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the payment-method fold as a JSON object",
+    )
+
     rep = sub.add_parser("replay", help="fold events into tickets and print them")
     rep.add_argument("--store", type=Path, default=DEFAULT_STORE)
     rep.add_argument("--limit", type=int, default=None)
@@ -145,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
         return _sku(args.store, args.as_json)
     if args.cmd == "bay":
         return _bay(args.store, args.as_json)
+    if args.cmd == "pay":
+        return _pay(args.store, args.as_json)
     if args.cmd == "replay":
         return _replay(args.store, args.limit, args.as_json)
     return 2
@@ -249,6 +265,17 @@ def _bay(path: Path, as_json: bool = False) -> int:
         print(render_bay_json(events), end="")
     else:
         print(render_bay(events), end="")
+    return 0
+
+
+def _pay(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_pay_json(events), end="")
+    else:
+        print(render_pay(events), end="")
     return 0
 
 
