@@ -48,6 +48,8 @@ python -m event_spine hours
 python -m event_spine brief
 python -m event_spine sku
 python -m event_spine sku --json
+python -m event_spine bay
+python -m event_spine bay --json
 python -m event_spine replay --limit 5
 python -m event_spine replay --json --limit 5
 ```
@@ -169,6 +171,13 @@ tickets at the end of the log, and the same detector hit counts.
 Sorted highest ext first. `sku --json` emits the same fold as a JSON
 object (cents stay ints).
 
+`bay` folds the same log into one row per service bay from the ticket
+projection: tickets, closed vs still-open, closed-ticket revenue
+(integer cents, printed as dollars), and Hyndman-Fan p50 dwell.
+Still-open tickets count toward tickets/open, not revenue or dwell.
+Sorted highest revenue first. `bay --json` emits the same fold as a
+JSON object (cents stay ints).
+
 ## 2026-08-27
 
 `sku` rebuilds the day's menu mix from `LineItemAdded` alone — no
@@ -176,6 +185,12 @@ ticket projection required. Whale SKUs (`TRN-FLUSH`, `DIFF-FLUID`,
 `BRK-FLUSH`) show up next to the oil-change baseline. Human screen
 prints dollars; `--json` keeps cents as numbers. Run
 `python -m event_spine sku` or `python -m event_spine sku --json`.
+
+`bay` rebuilds one row per service bay from `TicketOpened` → ticket
+projection. Closed-ticket line totals become revenue; leftover open
+tickets stay in the open column. Human screen prints dollars;
+`--json` keeps cents as numbers. Run
+`python -m event_spine bay` or `python -m event_spine bay --json`.
 
 ## 2026-08-26
 
@@ -267,8 +282,9 @@ event_spine/hours.py      hourly fold from the log
 event_spine/gaps.py       shop-hour TicketOpened gaps
 event_spine/brief.py      daily ops brief from the log
 event_spine/sku.py        SKU fold from LineItemAdded
+event_spine/bay.py        per-bay tickets, revenue, dwell
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | replay
 ```
 
 ## License

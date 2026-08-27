@@ -11,6 +11,7 @@ from event_spine.detect import SILENT_GAP_MINUTES, Anomaly, detect, detect_silen
 from event_spine.events import Event, EventType
 from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR, HourBin, by_hour
 from event_spine.project import Ticket, project
+from event_spine.bay import BayRow, by_bay
 from event_spine.sku import SkuRow, by_sku
 from event_spine.simulate import SHOP
 from event_spine.stats import DayStats, summarize
@@ -247,6 +248,58 @@ def render_hours_json(events: list[Event], bins: list[HourBin] | None = None) ->
                 "peak_open": row.peak_open,
             }
             for row in bins
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def render_bay(events: list[Event], rows: list[BayRow] | None = None) -> str:
+    """One line per bay rebuilt from the ticket projection, highest revenue first."""
+    if rows is None:
+        rows = by_bay(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_rev = sum(row.revenue_cents for row in rows)
+    total_tickets = sum(row.tickets for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  bay",
+        f"{len(rows)} bays  ·  {total_tickets} tickets  ·  rev {fmt_cents(total_rev)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no tickets")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        if row.dwell_p50_min is None:
+            dwell = "dwell  —"
+        else:
+            dwell = f"dwell p50 {row.dwell_p50_min:.1f}min"
+        lines.append(
+            f"bay {row.bay:<3} tickets {row.tickets:<3} "
+            f"closed {row.closed:<3} open {row.open:<3} "
+            f"{fmt_cents(row.revenue_cents):>10}  {dwell}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_bay_json(events: list[Event], rows: list[BayRow] | None = None) -> str:
+    """JSON object for the bay fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_bay(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "bays": [
+            {
+                "bay": row.bay,
+                "tickets": row.tickets,
+                "closed": row.closed,
+                "open": row.open,
+                "revenue_cents": row.revenue_cents,
+                "dwell_p50_min": row.dwell_p50_min,
+            }
+            for row in rows
         ],
     }
     return json.dumps(payload, indent=2) + "\n"
