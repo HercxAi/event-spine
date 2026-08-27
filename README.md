@@ -138,7 +138,9 @@ that justify it. `detect --json` emits the same list as a JSON array.
 payment-failure rate, p50/p95 dwell (linear interpolation, Hyndman-Fan
 type 7), and how many times each detector fired.
 `stats --json` emits the same fold as a JSON object (dwell minutes stay
-floats; fail_rate is a 0–1 fraction).
+floats; fail_rate is a 0–1 fraction; closed-ticket totals are cents).
+The human `stats` screen also prints Hyndman-Fan p50/p95 of closed
+ticket totals (integer cents, shown as dollars).
 
 `hours` folds the same log into one line per shop-open hour (07:00–18:00
 UTC, plus any hour that actually has events). Empty hours stay in the
@@ -178,6 +180,10 @@ fields as `detect --json`. Run `python -m event_spine gaps --json`.
 `replay --json` is the ticket projection as a JSON object — shop,
 day, and each ticket with line items and payments (cents stay ints).
 `--limit` still caps the list. Run `python -m event_spine replay --json`.
+
+`stats` now includes closed-ticket total p50/p95 (same Hyndman-Fan
+type 7 as dwell). Cents stay numbers in `--json`; the human screen
+prints them as dollars.
 
 ## 2026-08-25
 

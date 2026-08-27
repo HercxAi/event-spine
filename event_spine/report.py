@@ -78,6 +78,13 @@ def render_stats(events: list[Event], stats: DayStats | None = None) -> str:
             f"dwell p50 {stats.dwell_p50_min:.1f}min  "
             f"p95 {stats.dwell_p95_min:.1f}min"
         )
+    if stats.total_p50_cents is None or stats.total_p95_cents is None:
+        totals = "total  —"
+    else:
+        totals = (
+            f"total p50 {fmt_cents(int(round(stats.total_p50_cents)))}  "
+            f"p95 {fmt_cents(int(round(stats.total_p95_cents)))}"
+        )
     lines = [
         f"{SHOP}  ·  {day}  ·  {stats.events} events  ·  {stats.tickets} tickets",
         (
@@ -85,6 +92,7 @@ def render_stats(events: list[Event], stats: DayStats | None = None) -> str:
             f"fail rate {stats.fail_rate:.1%} ({stats.failures}/{stats.payments})  ·  "
             f"{dwell}"
         ),
+        totals,
         "",
         "detector hits",
     ]
@@ -109,6 +117,8 @@ def render_stats_json(events: list[Event], stats: DayStats | None = None) -> str
         "fail_rate": stats.fail_rate,
         "dwell_p50_min": stats.dwell_p50_min,
         "dwell_p95_min": stats.dwell_p95_min,
+        "total_p50_cents": stats.total_p50_cents,
+        "total_p95_cents": stats.total_p95_cents,
         "detector_hits": [
             {"detector": name, "count": count} for name, count in stats.detector_hits
         ],

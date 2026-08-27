@@ -8,7 +8,7 @@ from event_spine.detect import detect
 from event_spine.events import Event, EventType
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.report import render_stats_json
-from event_spine.stats import dwell_minutes, percentile, summarize
+from event_spine.stats import closed_totals_cents, dwell_minutes, percentile, summarize
 from tests.helpers import at, ev, ticket_flow
 
 
@@ -66,6 +66,8 @@ class SummarizeTests(unittest.TestCase):
         # p50 of [10,20,30,40,50] = 30; p95 → idx 3.8 → 40 + 0.8*10 = 48
         self.assertAlmostEqual(stats.dwell_p50_min or 0.0, 30.0)
         self.assertAlmostEqual(stats.dwell_p95_min or 0.0, 48.0)
+        self.assertAlmostEqual(stats.total_p50_cents or 0.0, 7000.0)
+        self.assertAlmostEqual(stats.total_p95_cents or 0.0, 7000.0)
         hits = dict(stats.detector_hits)
         self.assertEqual(hits["ticket_dwell"], 0)
         self.assertEqual(hits["ticket_total"], 0)
@@ -91,6 +93,8 @@ class SummarizeTests(unittest.TestCase):
         self.assertEqual(stats.fail_rate, 0.0)
         self.assertIsNone(stats.dwell_p50_min)
         self.assertIsNone(stats.dwell_p95_min)
+        self.assertIsNone(stats.total_p50_cents)
+        self.assertIsNone(stats.total_p95_cents)
         self.assertEqual(sum(n for _, n in stats.detector_hits), 0)
 
     def test_seeded_day_matches_detectors_and_p95_beats_p50(self) -> None:
@@ -122,6 +126,31 @@ class SummarizeTests(unittest.TestCase):
         self.assertGreater(by_name["concurrent_open"], 0)
 
 
+    def test_closed_ticket_total_percentiles(self) -> None:
+        events: list[Event] = []
+        t = at(8)
+        for i, cents in enumerate((5000, 6000, 7000, 8000, 9000)):
+            events.extend(
+                ticket_flow(f"t_{i}", t, cents, prefix=f"p{i}", dwell=timedelta(minutes=10))
+            )
+            t += timedelta(hours=1)
+        stats = summarize(events)
+        self.assertEqual(closed_totals_cents(events), [5000.0, 6000.0, 7000.0, 8000.0, 9000.0])
+        # p50 of five values = 7000; p95 → idx 3.8 → 8000 + 0.8*1000 = 8800
+        self.assertAlmostEqual(stats.total_p50_cents or 0.0, 7000.0)
+        self.assertAlmostEqual(stats.total_p95_cents or 0.0, 8800.0)
+
+    def test_open_ticket_is_not_in_total_percentiles(self) -> None:
+        events = [
+            ev("e1", EventType.TICKET_OPENED, at(8), "t_open", bay="1", vehicle="x"),
+            *ticket_flow("t_done", at(9), 7000, prefix="c", dwell=timedelta(minutes=12)),
+        ]
+        stats = summarize(events)
+        self.assertEqual(closed_totals_cents(events), [7000.0])
+        self.assertAlmostEqual(stats.total_p50_cents or 0.0, 7000.0)
+        self.assertAlmostEqual(stats.total_p95_cents or 0.0, 7000.0)
+
+
 class StatsJsonTests(unittest.TestCase):
     def test_render_stats_json_matches_fold(self) -> None:
         events = [
@@ -137,6 +166,8 @@ class StatsJsonTests(unittest.TestCase):
         self.assertAlmostEqual(payload["fail_rate"], stats.fail_rate)
         self.assertAlmostEqual(payload["dwell_p50_min"], stats.dwell_p50_min)
         self.assertAlmostEqual(payload["dwell_p95_min"], stats.dwell_p95_min)
+        self.assertAlmostEqual(payload["total_p50_cents"], stats.total_p50_cents)
+        self.assertAlmostEqual(payload["total_p95_cents"], stats.total_p95_cents)
         self.assertEqual(
             {row["detector"]: row["count"] for row in payload["detector_hits"]},
             dict(stats.detector_hits),

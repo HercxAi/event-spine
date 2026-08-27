@@ -142,6 +142,8 @@ class CliTests(unittest.TestCase):
                 "fail_rate",
                 "dwell_p50_min",
                 "dwell_p95_min",
+                "total_p50_cents",
+                "total_p95_cents",
                 "detector_hits",
             ):
                 self.assertIn(key, payload)

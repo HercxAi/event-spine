@@ -36,6 +36,8 @@ class DayStats:
     fail_rate: float
     dwell_p50_min: float | None
     dwell_p95_min: float | None
+    total_p50_cents: float | None
+    total_p95_cents: float | None
     detector_hits: tuple[tuple[str, int], ...]
 
 
@@ -68,11 +70,18 @@ def dwell_minutes(events: list[Event]) -> list[float]:
     return out
 
 
+
+def closed_totals_cents(events: list[Event]) -> list[float]:
+    """Closed-ticket line-item sums in cents, close order. Open tickets skip."""
+    return [float(ticket.total_cents) for ticket in closed_in_order(project(events))]
+
+
 def summarize(events: list[Event]) -> DayStats:
     tickets = project(events)
     payments = [e for e in events if e.type in PAYMENT_TYPES]
     fails = sum(1 for e in payments if e.type is EventType.PAYMENT_FAILED)
     dwells = dwell_minutes(events)
+    totals = closed_totals_cents(events)
     hits = Counter(a.detector for a in detect(events))
     names = list(DETECTORS)
     for name in sorted(hits):
@@ -87,5 +96,7 @@ def summarize(events: list[Event]) -> DayStats:
         fail_rate=(fails / len(payments)) if payments else 0.0,
         dwell_p50_min=percentile(dwells, 0.50),
         dwell_p95_min=percentile(dwells, 0.95),
+        total_p50_cents=percentile(totals, 0.50),
+        total_p95_cents=percentile(totals, 0.95),
         detector_hits=tuple((name, hits.get(name, 0)) for name in names),
     )
