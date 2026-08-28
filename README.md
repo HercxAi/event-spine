@@ -56,6 +56,8 @@ python -m event_spine reason
 python -m event_spine reason --json
 python -m event_spine dwell
 python -m event_spine dwell --json
+python -m event_spine vehicle
+python -m event_spine vehicle --json
 python -m event_spine replay --limit 5
 python -m event_spine replay --json --limit 5
 ```
@@ -203,6 +205,22 @@ histogram shape stays stable. The seeded three-hour plant lands in
 `60+`. `dwell --json` emits the same fold as a JSON object (cents
 stay ints).
 
+`vehicle` folds the same log into one row per vehicle from the ticket
+projection: tickets, closed vs still-open, closed-ticket revenue
+(integer cents, printed as dollars), and Hyndman-Fan p50 dwell.
+Still-open tickets count toward tickets/open, not revenue or dwell.
+Sorted highest revenue first. `vehicle --json` emits the same fold as a
+JSON object (cents stay ints).
+
+## 2026-08-28
+
+`vehicle` rebuilds one row per car from `TicketOpened` → ticket
+projection. Closed-ticket line totals become revenue; leftover open
+tickets stay in the open column. On the seeded day the Silverado and Escape
+lead the lot by closed revenue. Human screen prints dollars; `--json` keeps cents as
+numbers. Run
+`python -m event_spine vehicle` or `python -m event_spine vehicle --json`.
+
 ## 2026-08-27
 
 `sku` rebuilds the day's menu mix from `LineItemAdded` alone — no
@@ -326,10 +344,11 @@ event_spine/brief.py      daily ops brief from the log
 event_spine/sku.py        SKU fold from LineItemAdded
 event_spine/bay.py        per-bay tickets, revenue, dwell
 event_spine/dwell.py      closed-ticket dwell bands
+event_spine/vehicle.py    per-vehicle tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | vehicle | pay | reason | replay
 ```
 
 ## License

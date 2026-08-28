@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, or fold payment methods."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold vehicles, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -33,6 +33,8 @@ from event_spine.report import (
     render_sku_json,
     render_stats,
     render_stats_json,
+    render_vehicle,
+    render_vehicle_json,
 )
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
@@ -136,6 +138,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the dwell-bucket fold as a JSON object",
     )
 
+    vh = sub.add_parser(
+        "vehicle",
+        help="per-vehicle tickets, revenue, and dwell rebuilt from the ticket projection",
+    )
+    vh.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    vh.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the vehicle fold as a JSON object",
+    )
+
     rs = sub.add_parser(
         "reason",
         help="PaymentFailed reasons, ask cents, and methods rebuilt from the log",
@@ -188,6 +202,8 @@ def main(argv: list[str] | None = None) -> int:
         return _bay(args.store, args.as_json)
     if args.cmd == "dwell":
         return _dwell(args.store, args.as_json)
+    if args.cmd == "vehicle":
+        return _vehicle(args.store, args.as_json)
     if args.cmd == "reason":
         return _reason(args.store, args.as_json)
     if args.cmd == "pay":
@@ -308,6 +324,17 @@ def _dwell(path: Path, as_json: bool = False) -> int:
         print(render_dwell_json(events), end="")
     else:
         print(render_dwell(events), end="")
+    return 0
+
+
+def _vehicle(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_vehicle_json(events), end="")
+    else:
+        print(render_vehicle(events), end="")
     return 0
 
 

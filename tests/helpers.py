@@ -35,6 +35,7 @@ def ticket_flow(
     items: list[tuple[str, int]] | None = None,
     dwell: timedelta | None = None,
     bay: str = "1",
+    vehicle: str = "2018 Honda Civic",
 ) -> list[Event]:
     """Minimal open → line(s) → pay → close chain."""
     rows = items or [("OIL-CONV", total_cents)]
@@ -47,7 +48,7 @@ def ticket_flow(
         seq += 1
         return f"{prefix}{seq:02d}"
 
-    out.append(ev(nid(), EventType.TICKET_OPENED, t, ticket_id, bay=bay, vehicle="2018 Honda Civic"))
+    out.append(ev(nid(), EventType.TICKET_OPENED, t, ticket_id, bay=bay, vehicle=vehicle))
     running = 0
     for sku, cents in rows:
         t = t + timedelta(seconds=30)
