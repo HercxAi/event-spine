@@ -12,6 +12,7 @@ from event_spine.events import Event, EventType
 from event_spine.hours import SHOP_CLOSE_HOUR, SHOP_OPEN_HOUR, HourBin, by_hour
 from event_spine.project import Ticket, project
 from event_spine.bay import BayRow, by_bay
+from event_spine.dwell import DwellRow, by_dwell
 from event_spine.pay import PayRow, by_method
 from event_spine.reason import ReasonRow, by_reason
 from event_spine.sku import SkuRow, by_sku
@@ -347,6 +348,55 @@ def render_reason_json(events: list[Event], rows: list[ReasonRow] | None = None)
                 "fails": row.fails,
                 "ask_cents": row.ask_cents,
                 "methods": list(row.methods),
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def render_dwell(events: list[Event], rows: list[DwellRow] | None = None) -> str:
+    """One line per dwell band rebuilt from closed tickets, fixed bucket order."""
+    if rows is None:
+        rows = by_dwell(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_tickets = sum(row.tickets for row in rows)
+    total_rev = sum(row.revenue_cents for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  dwell",
+        f"{len(rows)} bands  ·  {total_tickets} closed  ·  rev {fmt_cents(total_rev)}",
+        "",
+    ]
+    if total_tickets == 0:
+        lines.append("no closed tickets")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        if row.dwell_p50_min is None:
+            dwell = "p50  —"
+        else:
+            dwell = f"p50 {row.dwell_p50_min:.1f}min"
+        lines.append(
+            f"{row.bucket:<6} tickets {row.tickets:<3} "
+            f"{fmt_cents(row.revenue_cents):>10}  {dwell}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_dwell_json(events: list[Event], rows: list[DwellRow] | None = None) -> str:
+    """JSON object for the dwell-bucket fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_dwell(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "buckets": [
+            {
+                "bucket": row.bucket,
+                "tickets": row.tickets,
+                "revenue_cents": row.revenue_cents,
+                "dwell_p50_min": row.dwell_p50_min,
             }
             for row in rows
         ],

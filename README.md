@@ -54,6 +54,8 @@ python -m event_spine pay
 python -m event_spine pay --json
 python -m event_spine reason
 python -m event_spine reason --json
+python -m event_spine dwell
+python -m event_spine dwell --json
 python -m event_spine replay --limit 5
 python -m event_spine replay --json --limit 5
 ```
@@ -193,6 +195,14 @@ fail count, ask cents, and which tenders saw it. Sorted most fails
 first. `reason --json` emits the same fold as a JSON object (cents
 stay ints).
 
+`dwell` folds the same log into fixed closed-ticket service bands
+(`<5`, `5-15`, `15-60`, `60+` minutes): ticket count, closed-ticket
+revenue (integer cents), and Hyndman-Fan p50 dwell inside the band.
+Still-open tickets are ignored. Empty bands still print so the
+histogram shape stays stable. The seeded three-hour plant lands in
+`60+`. `dwell --json` emits the same fold as a JSON object (cents
+stay ints).
+
 ## 2026-08-27
 
 `sku` rebuilds the day's menu mix from `LineItemAdded` alone — no
@@ -217,6 +227,12 @@ are the same revenue hours uses. Human screen prints dollars;
 seeded day that is network on card, ask dollars matching the
 declined tickets. Run
 `python -m event_spine reason` or `python -m event_spine reason --json`.
+
+`dwell` rebuilds a four-band histogram from open/close facts on the
+ticket projection. Most oil changes sit under five minutes; the
+planted 09:42 long bay sits alone in `60+`. Human screen prints
+dollars; `--json` keeps cents as numbers. Run
+`python -m event_spine dwell` or `python -m event_spine dwell --json`.
 
 ## 2026-08-26
 
@@ -309,9 +325,11 @@ event_spine/gaps.py       shop-hour TicketOpened gaps
 event_spine/brief.py      daily ops brief from the log
 event_spine/sku.py        SKU fold from LineItemAdded
 event_spine/bay.py        per-bay tickets, revenue, dwell
+event_spine/dwell.py      closed-ticket dwell bands
 event_spine/pay.py        per-method captured vs failed
+event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | pay | reason | replay
 ```
 
 ## License

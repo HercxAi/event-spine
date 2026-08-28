@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, or fold payment methods."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ from event_spine.report import (
     render_brief_json,
     render_detect,
     render_detect_json,
+    render_dwell,
+    render_dwell_json,
     render_gaps,
     render_gaps_json,
     render_hours,
@@ -122,6 +124,17 @@ def main(argv: list[str] | None = None) -> int:
         help="print the bay fold as a JSON object",
     )
 
+    dw = sub.add_parser(
+        "dwell",
+        help="closed-ticket dwell bands rebuilt from open/close facts",
+    )
+    dw.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    dw.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the dwell-bucket fold as a JSON object",
+    )
 
     rs = sub.add_parser(
         "reason",
@@ -173,6 +186,8 @@ def main(argv: list[str] | None = None) -> int:
         return _sku(args.store, args.as_json)
     if args.cmd == "bay":
         return _bay(args.store, args.as_json)
+    if args.cmd == "dwell":
+        return _dwell(args.store, args.as_json)
     if args.cmd == "reason":
         return _reason(args.store, args.as_json)
     if args.cmd == "pay":
@@ -283,6 +298,17 @@ def _bay(path: Path, as_json: bool = False) -> int:
         print(render_bay(events), end="")
     return 0
 
+
+
+def _dwell(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_dwell_json(events), end="")
+    else:
+        print(render_dwell(events), end="")
+    return 0
 
 
 def _reason(path: Path, as_json: bool = False) -> int:
