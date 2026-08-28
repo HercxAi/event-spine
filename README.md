@@ -60,6 +60,8 @@ python -m event_spine vehicle
 python -m event_spine vehicle --json
 python -m event_spine size
 python -m event_spine size --json
+python -m event_spine lines
+python -m event_spine lines --json
 python -m event_spine replay --limit 5
 python -m event_spine replay --json --limit 5
 ```
@@ -222,6 +224,14 @@ histogram shape stays stable. The seeded $565 flush plant lands in
 `$200+`. `size --json` emits the same fold as a JSON object (cents
 stay ints).
 
+`lines` folds the same log into fixed closed-ticket line-count bands
+(`1`, `2`, `3`, `4+`): ticket count, closed-ticket revenue (integer
+cents), and Hyndman-Fan p50 total inside the band. Still-open tickets
+are ignored. Empty bands still print so the histogram shape stays
+stable. On the seeded day most oil changes sit in `3` or `4+`; the
+flush ticket lands in `4+`. `lines --json` emits the same fold as a
+JSON object (cents stay ints).
+
 ## 2026-08-28
 
 `vehicle` rebuilds one row per car from `TicketOpened` → ticket
@@ -236,6 +246,12 @@ line-item sums on the ticket projection. Most oil changes sit in
 `$50-100`; the planted $565 flush sits alone in `$200+`. Human screen
 prints dollars; `--json` keeps cents as numbers. Run
 `python -m event_spine size` or `python -m event_spine size --json`.
+
+`lines` rebuilds a four-band histogram of closed-ticket basket depth
+from the ticket projection. Single-SKU tickets stay rare on the seeded
+day; the flush and multi-add tickets land in `4+`. Human screen prints
+dollars; `--json` keeps cents as numbers. Run
+`python -m event_spine lines` or `python -m event_spine lines --json`.
 
 ## 2026-08-27
 
@@ -362,10 +378,11 @@ event_spine/bay.py        per-bay tickets, revenue, dwell
 event_spine/dwell.py      closed-ticket dwell bands
 event_spine/vehicle.py    per-vehicle tickets, revenue, dwell
 event_spine/size.py       closed-ticket total bands
+event_spine/lines.py      closed-ticket line-count bands
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | vehicle | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | vehicle | pay | reason | replay
 ```
 
 ## License
