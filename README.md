@@ -48,6 +48,8 @@ python -m event_spine hours
 python -m event_spine brief
 python -m event_spine sku
 python -m event_spine sku --json
+python -m event_spine family
+python -m event_spine family --json
 python -m event_spine bay
 python -m event_spine bay --json
 python -m event_spine pay
@@ -183,6 +185,12 @@ tickets at the end of the log, and the same detector hit counts.
 Sorted highest ext first. `sku --json` emits the same fold as a JSON
 object (cents stay ints).
 
+`family` folds the same log into one row per catalog family from
+`LineItemAdded` — the SKU prefix before the first hyphen (`OIL-CONV` →
+`OIL`; bare `INSP` stays `INSP`). Distinct SKU count, line count, qty
+sum, and ext cents. Sorted highest ext first. `family --json` emits the
+same fold as a JSON object (cents stay ints).
+
 `bay` folds the same log into one row per service bay from the ticket
 projection: tickets, closed vs still-open, closed-ticket revenue
 (integer cents, printed as dollars), and Hyndman-Fan p50 dwell.
@@ -233,6 +241,13 @@ flush ticket lands in `4+`. `lines --json` emits the same fold as a
 JSON object (cents stay ints).
 
 ## 2026-08-28
+
+`family` rebuilds one row per catalog family from `LineItemAdded` alone
+— no ticket projection required. Prefix before the first hyphen; bare
+codes stay whole. On the seeded day OIL and FIL sit next to the whale
+`TRN` flush. Human screen prints dollars; `--json` keeps cents as
+numbers. Run
+`python -m event_spine family` or `python -m event_spine family --json`.
 
 `vehicle` rebuilds one row per car from `TicketOpened` → ticket
 projection. Closed-ticket line totals become revenue; leftover open
@@ -374,6 +389,7 @@ event_spine/hours.py      hourly fold from the log
 event_spine/gaps.py       shop-hour TicketOpened gaps
 event_spine/brief.py      daily ops brief from the log
 event_spine/sku.py        SKU fold from LineItemAdded
+event_spine/family.py     catalog-family fold from LineItemAdded
 event_spine/bay.py        per-bay tickets, revenue, dwell
 event_spine/dwell.py      closed-ticket dwell bands
 event_spine/vehicle.py    per-vehicle tickets, revenue, dwell
@@ -382,7 +398,7 @@ event_spine/lines.py      closed-ticket line-count bands
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | vehicle | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | family | bay | dwell | size | lines | vehicle | pay | reason | replay
 ```
 
 ## License

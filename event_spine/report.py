@@ -18,6 +18,7 @@ from event_spine.size import SizeRow, by_size
 from event_spine.lines import LinesRow, by_lines
 from event_spine.pay import PayRow, by_method
 from event_spine.reason import ReasonRow, by_reason
+from event_spine.family import FamilyRow, by_family
 from event_spine.sku import SkuRow, by_sku
 from event_spine.simulate import SHOP
 from event_spine.stats import DayStats, summarize
@@ -647,6 +648,53 @@ def render_sku_json(events: list[Event], rows: list[SkuRow] | None = None) -> st
             {
                 "sku": row.sku,
                 "description": row.description,
+                "lines": row.lines,
+                "qty": row.qty,
+                "ext_cents": row.ext_cents,
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def render_family(events: list[Event], rows: list[FamilyRow] | None = None) -> str:
+    """One line per catalog family rebuilt from LineItemAdded, highest ext_cents first."""
+    if rows is None:
+        rows = by_family(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_ext = sum(row.ext_cents for row in rows)
+    total_qty = sum(row.qty for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  family",
+        f"{len(rows)} families  ·  {total_qty} units  ·  ext {fmt_cents(total_ext)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no line items")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        lines.append(
+            f"{row.family:<8} skus {row.skus:<3} "
+            f"lines {row.lines:<3} qty {row.qty:<4} "
+            f"{fmt_cents(row.ext_cents):>10}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_family_json(events: list[Event], rows: list[FamilyRow] | None = None) -> str:
+    """JSON object for the family fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_family(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "families": [
+            {
+                "family": row.family,
+                "skus": row.skus,
                 "lines": row.lines,
                 "qty": row.qty,
                 "ext_cents": row.ext_cents,
