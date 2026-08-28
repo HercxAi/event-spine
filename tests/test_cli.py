@@ -169,6 +169,17 @@ class CliTests(unittest.TestCase):
             self.assertIn("tickets", text)
             self.assertIn("rev $", text)
 
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["size", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("size", text)
+            self.assertIn("bands", text)
+            self.assertIn("$200+", text)
+            self.assertIn("closed", text)
+
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
@@ -505,6 +516,37 @@ class CliTests(unittest.TestCase):
             ):
                 self.assertIn(key, first)
 
+
+
+    def test_size_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["size", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_size_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["size", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("buckets", payload)
+            self.assertEqual(len(payload["buckets"]), 4)
+            first = payload["buckets"][0]
+            for key in ("bucket", "tickets", "revenue_cents", "total_p50_cents"):
+                self.assertIn(key, first)
+            labels = [row["bucket"] for row in payload["buckets"]]
+            self.assertEqual(labels, ["<$50", "$50-100", "$100-200", "$200+"])
+            whale = next(row for row in payload["buckets"] if row["bucket"] == "$200+")
+            self.assertEqual(whale["tickets"], 1)
 
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:
