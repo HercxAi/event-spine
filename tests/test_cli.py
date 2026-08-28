@@ -116,6 +116,18 @@ class CliTests(unittest.TestCase):
 
             before = path.read_text(encoding="utf-8")
             with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["family", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("family", text)
+            self.assertIn("OIL", text)
+            self.assertIn("FIL", text)
+            self.assertIn("units", text)
+            self.assertIn("ext $", text)
+
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
                 code = main(["bay", "--store", str(path)])
             text = out.getvalue()
             self.assertEqual(code, 0)
@@ -375,6 +387,37 @@ class CliTests(unittest.TestCase):
                 self.assertIn(key, first)
             self.assertGreaterEqual(sum(row["qty"] for row in payload["skus"]), 1)
             self.assertGreaterEqual(sum(row["ext_cents"] for row in payload["skus"]), 0)
+
+    def test_family_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["family", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_family_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["family", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("families", payload)
+            self.assertGreater(len(payload["families"]), 0)
+            first = payload["families"][0]
+            for key in ("family", "skus", "lines", "qty", "ext_cents"):
+                self.assertIn(key, first)
+            names = {row["family"] for row in payload["families"]}
+            self.assertIn("OIL", names)
+            self.assertIn("FIL", names)
+            self.assertGreaterEqual(sum(row["qty"] for row in payload["families"]), 1)
+            self.assertGreaterEqual(sum(row["ext_cents"] for row in payload["families"]), 0)
 
     def test_bay_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
