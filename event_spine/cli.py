@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold vehicles, or fold payment methods."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -33,6 +33,8 @@ from event_spine.report import (
     render_size_json,
     render_lines,
     render_lines_json,
+    render_tries,
+    render_tries_json,
     render_sku,
     render_sku_json,
     render_stats,
@@ -167,6 +169,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the line-count band fold as a JSON object",
     )
 
+    tr = sub.add_parser(
+        "tries",
+        help="closed-ticket payment-attempt bands rebuilt from the ticket projection",
+    )
+    tr.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    tr.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the payment-attempt band fold as a JSON object",
+    )
+
     sz = sub.add_parser(
         "size",
         help="closed-ticket total bands rebuilt from line-item sums",
@@ -235,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
         return _vehicle(args.store, args.as_json)
     if args.cmd == "lines":
         return _lines(args.store, args.as_json)
+    if args.cmd == "tries":
+        return _tries(args.store, args.as_json)
     if args.cmd == "size":
         return _size(args.store, args.as_json)
     if args.cmd == "reason":
@@ -370,6 +386,17 @@ def _lines(path: Path, as_json: bool = False) -> int:
         print(render_lines_json(events), end="")
     else:
         print(render_lines(events), end="")
+    return 0
+
+
+def _tries(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_tries_json(events), end="")
+    else:
+        print(render_tries(events), end="")
     return 0
 
 def _size(path: Path, as_json: bool = False) -> int:
