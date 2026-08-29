@@ -772,6 +772,41 @@ class CliTests(unittest.TestCase):
             self.assertIn("Civic", names)
             self.assertIn("F-150", names)
 
+    def test_body_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["body", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_body_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["body", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("bodies", payload)
+            self.assertGreater(len(payload["bodies"]), 0)
+            first = payload["bodies"][0]
+            for key in (
+                "body",
+                "tickets",
+                "closed",
+                "open",
+                "revenue_cents",
+                "dwell_p50_min",
+            ):
+                self.assertIn(key, first)
+            names = {row["body"] for row in payload["bodies"]}
+            self.assertEqual(names, {"car", "SUV", "truck"})
+
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "day.jsonl"

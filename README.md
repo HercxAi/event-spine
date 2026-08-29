@@ -64,6 +64,8 @@ python -m event_spine year
 python -m event_spine year --json
 python -m event_spine model
 python -m event_spine model --json
+python -m event_spine body
+python -m event_spine body --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -271,6 +273,13 @@ tickets count toward tickets/open, not revenue or dwell. Sorted
 highest revenue first. `model --json` emits the same fold as a JSON
 object (cents stay ints).
 
+`body` folds the same log into one row per vehicle body classified
+from `TicketOpened` (parse the model, then truck / SUV / car).
+Tickets, closed vs still-open, closed-ticket revenue (integer
+cents), and Hyndman-Fan p50 dwell. Still-open tickets count toward
+tickets/open, not revenue or dwell. Sorted highest revenue first.
+`body --json` emits the same fold as a JSON object (cents stay ints).
+
 ## 2026-08-29
 
 `year` rebuilds one row per model year from `TicketOpened.vehicle`
@@ -280,6 +289,13 @@ column. 2018, 2019, and 2022 show up next to the rest of the
 seeded lot. Human screen prints dollars; `--json` keeps cents as
 numbers. Run
 `python -m event_spine year` or `python -m event_spine year --json`.
+
+`body` rebuilds one row per body class from the same plate
+(`2018 Honda Civic` → car, `2021 Toyota RAV4` → SUV,
+`2015 Ford F-150` → truck). Closed-ticket line totals become
+revenue; leftover open tickets stay in the open column. Human
+screen prints dollars; `--json` keeps cents as numbers. Run
+`python -m event_spine body` or `python -m event_spine body --json`.
 
 ## 2026-08-28
 
