@@ -66,6 +66,8 @@ python -m event_spine model
 python -m event_spine model --json
 python -m event_spine body
 python -m event_spine body --json
+python -m event_spine age
+python -m event_spine age --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -280,6 +282,14 @@ cents), and Hyndman-Fan p50 dwell. Still-open tickets count toward
 tickets/open, not revenue or dwell. Sorted highest revenue first.
 `body --json` emits the same fold as a JSON object (cents stay ints).
 
+`age` folds the same log into one row per vehicle age band
+(`0-4`, `5-9`, `10-14`, `15-19`, `20+`) from `TicketOpened` year
+versus the shop day's year. Tickets, closed vs still-open,
+closed-ticket revenue (integer cents), and Hyndman-Fan p50 dwell.
+Still-open tickets count toward tickets/open, not revenue or dwell.
+Sorted highest revenue first, then newest band. `age --json` emits
+the same fold as a JSON object (cents stay ints).
+
 ## 2026-08-29
 
 `year` rebuilds one row per model year from `TicketOpened.vehicle`
@@ -296,6 +306,14 @@ numbers. Run
 revenue; leftover open tickets stay in the open column. Human
 screen prints dollars; `--json` keeps cents as numbers. Run
 `python -m event_spine body` or `python -m event_spine body --json`.
+
+`age` rebuilds one row per years-old band from the same plate
+(`2022 Ford Escape` → 0-4, `2018 Honda Civic` → 5-9,
+`2015 Ford F-150` → 10-14, `2011 Toyota Camry` → 15-19).
+Closed-ticket line totals become revenue; leftover open tickets
+stay in the open column. Human screen prints dollars; `--json`
+keeps cents as numbers. Run
+`python -m event_spine age` or `python -m event_spine age --json`.
 
 ## 2026-08-28
 
