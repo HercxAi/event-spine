@@ -62,6 +62,8 @@ python -m event_spine make
 python -m event_spine make --json
 python -m event_spine year
 python -m event_spine year --json
+python -m event_spine model
+python -m event_spine model --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -261,6 +263,14 @@ cents), and Hyndman-Fan p50 dwell. Still-open tickets count toward
 tickets/open, not revenue or dwell. Sorted highest revenue first.
 `year --json` emits the same fold as a JSON object (cents stay ints).
 
+`model` folds the same log into one row per vehicle model parsed
+from `TicketOpened` (skip a leading four-digit year and the make
+token, join the rest). Tickets, closed vs still-open, closed-ticket
+revenue (integer cents), and Hyndman-Fan p50 dwell. Still-open
+tickets count toward tickets/open, not revenue or dwell. Sorted
+highest revenue first. `model --json` emits the same fold as a JSON
+object (cents stay ints).
+
 ## 2026-08-29
 
 `year` rebuilds one row per model year from `TicketOpened.vehicle`
@@ -435,10 +445,11 @@ event_spine/lines.py      closed-ticket line-count bands
 event_spine/tries.py      closed-ticket payment-attempt bands
 event_spine/make.py       per-make tickets, revenue, dwell
 event_spine/year.py       per-year tickets, revenue, dwell
+event_spine/model.py      per-model tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | pay | reason | replay
 ```
 
 ## License
