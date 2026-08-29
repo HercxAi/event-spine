@@ -843,6 +843,41 @@ class CliTests(unittest.TestCase):
             names = {row["age"] for row in payload["ages"]}
             self.assertTrue({"0-4", "5-9", "10-14", "15-19"} <= names)
 
+    def test_origin_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["origin", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_origin_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["origin", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("origins", payload)
+            self.assertGreater(len(payload["origins"]), 0)
+            first = payload["origins"][0]
+            for key in (
+                "origin",
+                "tickets",
+                "closed",
+                "open",
+                "revenue_cents",
+                "dwell_p50_min",
+            ):
+                self.assertIn(key, first)
+            names = {row["origin"] for row in payload["origins"]}
+            self.assertTrue({"Japan", "US", "Korea", "Germany"} <= names)
+
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "day.jsonl"

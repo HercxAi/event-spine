@@ -18,6 +18,7 @@ from event_spine.year import YearRow, by_year
 from event_spine.model import ModelRow, by_model
 from event_spine.body import BodyRow, by_body
 from event_spine.age import AgeRow, by_age
+from event_spine.origin import OriginRow, by_origin
 from event_spine.dwell import DwellRow, by_dwell
 from event_spine.size import SizeRow, by_size
 from event_spine.lines import LinesRow, by_lines
@@ -625,6 +626,59 @@ def render_age_json(events: list[Event], rows: list[AgeRow] | None = None) -> st
         "ages": [
             {
                 "age": row.age,
+                "tickets": row.tickets,
+                "closed": row.closed,
+                "open": row.open,
+                "revenue_cents": row.revenue_cents,
+                "dwell_p50_min": row.dwell_p50_min,
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def render_origin(events: list[Event], rows: list[OriginRow] | None = None) -> str:
+    """One line per vehicle origin rebuilt from the ticket projection, highest revenue first."""
+    if rows is None:
+        rows = by_origin(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_rev = sum(row.revenue_cents for row in rows)
+    total_tickets = sum(row.tickets for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  origin",
+        f"{len(rows)} origins  ·  {total_tickets} tickets  ·  rev {fmt_cents(total_rev)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no tickets")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        if row.dwell_p50_min is None:
+            dwell = "dwell  —"
+        else:
+            dwell = f"dwell p50 {row.dwell_p50_min:.1f}min"
+        name = row.origin if row.origin else "—"
+        lines.append(
+            f"{name:<16} tickets {row.tickets:<3} "
+            f"closed {row.closed:<3} open {row.open:<3} "
+            f"{fmt_cents(row.revenue_cents):>10}  {dwell}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_origin_json(events: list[Event], rows: list[OriginRow] | None = None) -> str:
+    """JSON object for the origin fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_origin(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "origins": [
+            {
+                "origin": row.origin,
                 "tickets": row.tickets,
                 "closed": row.closed,
                 "open": row.open,

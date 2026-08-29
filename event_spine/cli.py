@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, fold models, fold bodies, fold ages, or fold payment methods."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, fold models, fold bodies, fold ages, fold origins, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -51,6 +51,8 @@ from event_spine.report import (
     render_body_json,
     render_age,
     render_age_json,
+    render_origin,
+    render_origin_json,
 )
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
@@ -226,6 +228,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the age fold as a JSON object",
     )
 
+    og = sub.add_parser(
+        "origin",
+        help="per-origin tickets, revenue, and dwell rebuilt from TicketOpened makes",
+    )
+    og.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    og.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the origin fold as a JSON object",
+    )
+
     ln = sub.add_parser(
         "lines",
         help="closed-ticket line-count bands rebuilt from the ticket projection",
@@ -326,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
         return _body(args.store, args.as_json)
     if args.cmd == "age":
         return _age(args.store, args.as_json)
+    if args.cmd == "origin":
+        return _origin(args.store, args.as_json)
     if args.cmd == "lines":
         return _lines(args.store, args.as_json)
     if args.cmd == "tries":
@@ -552,6 +568,17 @@ def _age(path: Path, as_json: bool = False) -> int:
         print(render_age_json(events), end="")
     else:
         print(render_age(events), end="")
+    return 0
+
+
+def _origin(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_origin_json(events), end="")
+    else:
+        print(render_origin(events), end="")
     return 0
 
 

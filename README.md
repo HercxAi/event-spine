@@ -68,6 +68,8 @@ python -m event_spine body
 python -m event_spine body --json
 python -m event_spine age
 python -m event_spine age --json
+python -m event_spine origin
+python -m event_spine origin --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -290,6 +292,13 @@ Still-open tickets count toward tickets/open, not revenue or dwell.
 Sorted highest revenue first, then newest band. `age --json` emits
 the same fold as a JSON object (cents stay ints).
 
+`origin` folds the same log into one row per vehicle origin
+(Japan, US, Korea, Germany) classified from `TicketOpened` make.
+Tickets, closed vs still-open, closed-ticket revenue (integer
+cents), and Hyndman-Fan p50 dwell. Still-open tickets count toward
+tickets/open, not revenue or dwell. Sorted highest revenue first.
+`origin --json` emits the same fold as a JSON object (cents stay ints).
+
 ## 2026-08-29
 
 `year` rebuilds one row per model year from `TicketOpened.vehicle`
@@ -314,6 +323,14 @@ Closed-ticket line totals become revenue; leftover open tickets
 stay in the open column. Human screen prints dollars; `--json`
 keeps cents as numbers. Run
 `python -m event_spine age` or `python -m event_spine age --json`.
+
+`origin` rebuilds one row per manufacturer origin from the same
+plate (`2018 Honda Civic` → Japan, `2015 Ford F-150` → US,
+`2020 Hyundai Tucson` → Korea, `2017 BMW 328i` → Germany).
+Closed-ticket line totals become revenue; leftover open tickets
+stay in the open column. Human screen prints dollars; `--json`
+keeps cents as numbers. Run
+`python -m event_spine origin` or `python -m event_spine origin --json`.
 
 ## 2026-08-28
 
@@ -480,10 +497,13 @@ event_spine/tries.py      closed-ticket payment-attempt bands
 event_spine/make.py       per-make tickets, revenue, dwell
 event_spine/year.py       per-year tickets, revenue, dwell
 event_spine/model.py      per-model tickets, revenue, dwell
+event_spine/body.py       per-body tickets, revenue, dwell
+event_spine/age.py        per-age-band tickets, revenue, dwell
+event_spine/origin.py     per-origin tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | pay | reason | replay
 ```
 
 ## License
