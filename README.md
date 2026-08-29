@@ -58,6 +58,8 @@ python -m event_spine dwell
 python -m event_spine dwell --json
 python -m event_spine vehicle
 python -m event_spine vehicle --json
+python -m event_spine make
+python -m event_spine make --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -243,6 +245,13 @@ On the seeded day the 4pm card-terminal sulk lands six tickets in
 `3+`. `tries --json` emits the same fold as a JSON object (cents stay
 ints).
 
+`make` folds the same log into one row per vehicle manufacturer parsed
+from `TicketOpened` (skip a leading four-digit year, keep the next
+token). Tickets, closed vs still-open, closed-ticket revenue (integer
+cents), and Hyndman-Fan p50 dwell. Still-open tickets count toward
+tickets/open, not revenue or dwell. Sorted highest revenue first.
+`make --json` emits the same fold as a JSON object (cents stay ints).
+
 ## 2026-08-28
 
 `vehicle` rebuilds one row per car from `TicketOpened` → ticket
@@ -269,6 +278,14 @@ attempts from the ticket projection. First-try captures fill `1`; the
 planted 4pm terminal sulk puts six tickets in `3+`. Human screen prints
 dollars; `--json` keeps cents as numbers. Run
 `python -m event_spine tries` or `python -m event_spine tries --json`.
+
+`make` rebuilds one row per manufacturer from `TicketOpened.vehicle`
+on the ticket projection (`2018 Honda Civic` → Honda). Closed-ticket
+line totals become revenue; leftover open tickets stay in the open
+column. Honda, Toyota, and Ford show up next to the rest of the
+seeded lot. Human screen prints dollars; `--json` keeps cents as
+numbers. Run
+`python -m event_spine make` or `python -m event_spine make --json`.
 
 ## 2026-08-27
 
@@ -397,10 +414,11 @@ event_spine/vehicle.py    per-vehicle tickets, revenue, dwell
 event_spine/size.py       closed-ticket total bands
 event_spine/lines.py      closed-ticket line-count bands
 event_spine/tries.py      closed-ticket payment-attempt bands
+event_spine/make.py       per-make tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | pay | reason | replay
 ```
 
 ## License
