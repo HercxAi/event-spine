@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, or fold payment methods."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -43,6 +43,8 @@ from event_spine.report import (
     render_vehicle_json,
     render_make,
     render_make_json,
+    render_year,
+    render_year_json,
 )
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
@@ -170,6 +172,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the make fold as a JSON object",
     )
 
+    yr = sub.add_parser(
+        "year",
+        help="per-year tickets, revenue, and dwell rebuilt from TicketOpened vehicles",
+    )
+    yr.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    yr.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the year fold as a JSON object",
+    )
+
 
     ln = sub.add_parser(
         "lines",
@@ -263,6 +277,8 @@ def main(argv: list[str] | None = None) -> int:
         return _vehicle(args.store, args.as_json)
     if args.cmd == "make":
         return _make(args.store, args.as_json)
+    if args.cmd == "year":
+        return _year(args.store, args.as_json)
     if args.cmd == "lines":
         return _lines(args.store, args.as_json)
     if args.cmd == "tries":
@@ -444,6 +460,17 @@ def _make(path: Path, as_json: bool = False) -> int:
         print(render_make_json(events), end="")
     else:
         print(render_make(events), end="")
+    return 0
+
+
+def _year(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_year_json(events), end="")
+    else:
+        print(render_year(events), end="")
     return 0
 
 

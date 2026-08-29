@@ -213,6 +213,17 @@ class CliTests(unittest.TestCase):
             self.assertIn("tickets", text)
             self.assertIn("rev $", text)
 
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["year", "--store", str(path)])
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertIn("year", text)
+            self.assertIn("years", text)
+            self.assertIn("tickets", text)
+            self.assertIn("rev $", text)
+
     def test_detect_missing_store(self) -> None:
         with TemporaryDirectory() as tmp:
             missing = Path(tmp) / "nope.jsonl"
@@ -676,6 +687,43 @@ class CliTests(unittest.TestCase):
             names = {row["make"] for row in payload["makes"]}
             self.assertIn("Honda", names)
             self.assertIn("Ford", names)
+
+    def test_year_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["year", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_year_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["year", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("years", payload)
+            self.assertGreater(len(payload["years"]), 0)
+            first = payload["years"][0]
+            for key in (
+                "year",
+                "tickets",
+                "closed",
+                "open",
+                "revenue_cents",
+                "dwell_p50_min",
+            ):
+                self.assertIn(key, first)
+            names = {row["year"] for row in payload["years"]}
+            self.assertIn("2018", names)
+            self.assertIn("2019", names)
+            self.assertIn("2022", names)
 
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:
