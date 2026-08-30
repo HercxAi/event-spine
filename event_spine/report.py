@@ -19,6 +19,7 @@ from event_spine.model import ModelRow, by_model
 from event_spine.body import BodyRow, by_body
 from event_spine.age import AgeRow, by_age
 from event_spine.origin import OriginRow, by_origin
+from event_spine.decade import DecadeRow, by_decade
 from event_spine.dwell import DwellRow, by_dwell
 from event_spine.size import SizeRow, by_size
 from event_spine.lines import LinesRow, by_lines
@@ -690,6 +691,58 @@ def render_origin_json(events: list[Event], rows: list[OriginRow] | None = None)
     }
     return json.dumps(payload, indent=2) + "\n"
 
+
+def render_decade(events: list[Event], rows: list[DecadeRow] | None = None) -> str:
+    """One line per vehicle decade rebuilt from the ticket projection, highest revenue first."""
+    if rows is None:
+        rows = by_decade(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_rev = sum(row.revenue_cents for row in rows)
+    total_tickets = sum(row.tickets for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  decade",
+        f"{len(rows)} decades  ·  {total_tickets} tickets  ·  rev {fmt_cents(total_rev)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no tickets")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        if row.dwell_p50_min is None:
+            dwell = "dwell  —"
+        else:
+            dwell = f"dwell p50 {row.dwell_p50_min:.1f}min"
+        name = row.decade if row.decade else "—"
+        lines.append(
+            f"{name:<16} tickets {row.tickets:<3} "
+            f"closed {row.closed:<3} open {row.open:<3} "
+            f"{fmt_cents(row.revenue_cents):>10}  {dwell}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_decade_json(events: list[Event], rows: list[DecadeRow] | None = None) -> str:
+    """JSON object for the decade fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_decade(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "decades": [
+            {
+                "decade": row.decade,
+                "tickets": row.tickets,
+                "closed": row.closed,
+                "open": row.open,
+                "revenue_cents": row.revenue_cents,
+                "dwell_p50_min": row.dwell_p50_min,
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
 
 def render_reason(events: list[Event], rows: list[ReasonRow] | None = None) -> str:
     """One line per PaymentFailed reason, most fails first."""
