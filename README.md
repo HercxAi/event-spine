@@ -76,6 +76,8 @@ python -m event_spine segment
 python -m event_spine segment --json
 python -m event_spine grade
 python -m event_spine grade --json
+python -m event_spine viscosity
+python -m event_spine viscosity --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -332,6 +334,17 @@ count toward tickets/open, not revenue or dwell. Sorted highest
 revenue first. `grade --json` emits the same fold as a JSON object
 (cents stay ints).
 
+`viscosity` folds the same log into one row per SAE oil weight
+(`5W-30`, `0W-20`) classified from `LineItemAdded` oil line items.
+The weight is parsed from the description; menu SKUs fall back
+(`OIL-CONV` / `OIL-SYN` → 5W-30, `OIL-FS` → 0W-20) when the
+description has no SAE. Highest oil grade wins when a ticket has
+more than one oil item; no oil stays empty. Tickets, closed vs
+still-open, closed-ticket revenue (integer cents), and Hyndman-Fan
+p50 dwell. Still-open tickets count toward tickets/open, not
+revenue or dwell. Sorted highest revenue first. `viscosity --json`
+emits the same fold as a JSON object (cents stay ints).
+
 ## 2026-08-30
 
 `segment` rebuilds one row per market segment from the same plate
@@ -342,6 +355,15 @@ Closed-ticket line totals become revenue; leftover open tickets
 stay in the open column. Human screen prints dollars; `--json`
 keeps cents as numbers. Run
 `python -m event_spine segment` or `python -m event_spine segment --json`.
+
+`viscosity` rebuilds one row per SAE oil weight from
+`LineItemAdded` (`Conventional 5W-30` / `OIL-CONV` → 5W-30,
+`Full synthetic 0W-20` / `OIL-FS` → 0W-20). Highest grade on the
+ticket picks the weight when more than one oil is on the ticket.
+Closed-ticket line totals become revenue; leftover open tickets
+stay in the open column. Human screen prints dollars; `--json`
+keeps cents as numbers. Run
+`python -m event_spine viscosity` or `python -m event_spine viscosity --json`.
 
 ## 2026-08-29
 
@@ -554,10 +576,11 @@ event_spine/origin.py     per-origin tickets, revenue, dwell
 event_spine/decade.py     per-decade tickets, revenue, dwell
 event_spine/segment.py    per-segment tickets, revenue, dwell
 event_spine/grade.py      per-grade tickets, revenue, dwell
+event_spine/viscosity.py  per-viscosity tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | grade | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | grade | viscosity | pay | reason | replay
 ```
 
 ## License
