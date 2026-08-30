@@ -24,6 +24,7 @@ from event_spine.segment import SegmentRow, by_segment
 from event_spine.grade import GradeRow, by_grade
 from event_spine.viscosity import ViscosityRow, by_viscosity
 from event_spine.family import FamilyRow, by_family
+from event_spine.shift import ShiftRow, by_shift
 from event_spine.dwell import DwellRow, by_dwell
 from event_spine.size import SizeRow, by_size
 from event_spine.lines import LinesRow, by_lines
@@ -950,6 +951,61 @@ def render_family_json(events: list[Event], rows: list[FamilyRow] | None = None)
         "families": [
             {
                 "family": row.family,
+                "tickets": row.tickets,
+                "closed": row.closed,
+                "open": row.open,
+                "revenue_cents": row.revenue_cents,
+                "dwell_p50_min": row.dwell_p50_min,
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+
+
+def render_shift(events: list[Event], rows: list[ShiftRow] | None = None) -> str:
+    """One line per shop-open shift rebuilt from TicketOpened hours, highest revenue first."""
+    if rows is None:
+        rows = by_shift(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_rev = sum(row.revenue_cents for row in rows)
+    total_tickets = sum(row.tickets for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  shift",
+        f"{len(rows)} shifts  ·  {total_tickets} tickets  ·  rev {fmt_cents(total_rev)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no tickets")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        if row.dwell_p50_min is None:
+            dwell = "dwell  —"
+        else:
+            dwell = f"dwell p50 {row.dwell_p50_min:.1f}min"
+        name = row.shift if row.shift else "—"
+        lines.append(
+            f"{name:<16} tickets {row.tickets:<3} "
+            f"closed {row.closed:<3} open {row.open:<3} "
+            f"{fmt_cents(row.revenue_cents):>10}  {dwell}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_shift_json(events: list[Event], rows: list[ShiftRow] | None = None) -> str:
+    """JSON object for the shift fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_shift(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "shifts": [
+            {
+                "shift": row.shift,
                 "tickets": row.tickets,
                 "closed": row.closed,
                 "open": row.open,

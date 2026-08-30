@@ -80,6 +80,8 @@ python -m event_spine viscosity
 python -m event_spine viscosity --json
 python -m event_spine family
 python -m event_spine family --json
+python -m event_spine shift
+python -m event_spine shift --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -357,6 +359,19 @@ and Hyndman-Fan p50 dwell. Still-open tickets count toward
 tickets/open, not revenue or dwell. Sorted highest revenue first.
 `family --json` emits the same fold as a JSON object (cents stay ints).
 
+`shift` folds the same log into one row per shop-open shift
+(`morning`, `midday`, `afternoon`) classified from
+`TicketOpened.occurred_at` hour (UTC). Morning is 07:00–10:59,
+midday 11:00–13:59, afternoon 14:00–18:59; hours outside that
+window stay empty. The seeded plants land in different bands
+(09:42 long dwell → morning, 11:30 fleet → midday, 14:18 whale
+and 16:03 card outage → afternoon). Tickets, closed vs
+still-open, closed-ticket revenue (integer cents), and
+Hyndman-Fan p50 dwell. Still-open tickets count toward
+tickets/open, not revenue or dwell. Sorted highest revenue
+first, then morning / midday / afternoon. `shift --json` emits
+the same fold as a JSON object (cents stay ints).
+
 
 ## 2026-08-30
 
@@ -385,6 +400,14 @@ Closed-ticket line totals become revenue; leftover open tickets
 stay in the open column. Human screen prints dollars; `--json`
 keeps cents as numbers. Run
 `python -m event_spine family` or `python -m event_spine family --json`.
+
+`shift` rebuilds one row per shop-open band from
+`TicketOpened` hours (07–10 morning, 11–13 midday, 14–18
+afternoon). The 09:42 dwell, 11:30 fleet dump, and 16:03 card
+outage land in different ops windows. Closed-ticket line totals
+become revenue; leftover open tickets stay in the open column.
+Human screen prints dollars; `--json` keeps cents as numbers. Run
+`python -m event_spine shift` or `python -m event_spine shift --json`.
 
 
 ## 2026-08-29
@@ -600,10 +623,11 @@ event_spine/segment.py    per-segment tickets, revenue, dwell
 event_spine/grade.py      per-grade tickets, revenue, dwell
 event_spine/viscosity.py  per-viscosity tickets, revenue, dwell
 event_spine/family.py     per-family tickets, revenue, dwell
+event_spine/shift.py      per-shift tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | grade | viscosity | family | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | grade | viscosity | family | shift | pay | reason | replay
 ```
 
 ## License
