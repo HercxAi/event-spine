@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, fold models, fold bodies, fold ages, fold origins, fold decades, fold segments, fold grades, fold viscosities, or fold payment methods."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, fold models, fold bodies, fold ages, fold origins, fold decades, fold segments, fold grades, fold viscosities, fold families, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -61,6 +61,8 @@ from event_spine.report import (
     render_grade_json,
     render_viscosity,
     render_viscosity_json,
+    render_family,
+    render_family_json,
 )
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
@@ -296,6 +298,19 @@ def main(argv: list[str] | None = None) -> int:
         help="print the viscosity fold as a JSON object",
     )
 
+
+    fm = sub.add_parser(
+        "family",
+        help="per-family tickets, revenue, and dwell rebuilt from LineItemAdded basket mixes",
+    )
+    fm.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    fm.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the family fold as a JSON object",
+    )
+
     ln = sub.add_parser(
         "lines",
         help="closed-ticket line-count bands rebuilt from the ticket projection",
@@ -406,6 +421,8 @@ def main(argv: list[str] | None = None) -> int:
         return _grade(args.store, args.as_json)
     if args.cmd == "viscosity":
         return _viscosity(args.store, args.as_json)
+    if args.cmd == "family":
+        return _family(args.store, args.as_json)
     if args.cmd == "lines":
         return _lines(args.store, args.as_json)
     if args.cmd == "tries":
@@ -687,6 +704,18 @@ def _viscosity(path: Path, as_json: bool = False) -> int:
         print(render_viscosity_json(events), end="")
     else:
         print(render_viscosity(events), end="")
+    return 0
+
+
+
+def _family(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_family_json(events), end="")
+    else:
+        print(render_family(events), end="")
     return 0
 
 
