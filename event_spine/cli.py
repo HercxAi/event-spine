@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, fold models, fold bodies, fold ages, fold origins, fold decades, or fold payment methods."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, fold models, fold bodies, fold ages, fold origins, fold decades, fold segments, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -55,6 +55,8 @@ from event_spine.report import (
     render_origin_json,
     render_decade,
     render_decade_json,
+    render_segment,
+    render_segment_json,
 )
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
@@ -254,6 +256,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the decade fold as a JSON object",
     )
 
+    sg = sub.add_parser(
+        "segment",
+        help="per-segment tickets, revenue, and dwell rebuilt from TicketOpened vehicles",
+    )
+    sg.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    sg.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the segment fold as a JSON object",
+    )
+
     ln = sub.add_parser(
         "lines",
         help="closed-ticket line-count bands rebuilt from the ticket projection",
@@ -358,6 +372,8 @@ def main(argv: list[str] | None = None) -> int:
         return _origin(args.store, args.as_json)
     if args.cmd == "decade":
         return _decade(args.store, args.as_json)
+    if args.cmd == "segment":
+        return _segment(args.store, args.as_json)
     if args.cmd == "lines":
         return _lines(args.store, args.as_json)
     if args.cmd == "tries":
@@ -606,6 +622,17 @@ def _decade(path: Path, as_json: bool = False) -> int:
         print(render_decade_json(events), end="")
     else:
         print(render_decade(events), end="")
+    return 0
+
+
+def _segment(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_segment_json(events), end="")
+    else:
+        print(render_segment(events), end="")
     return 0
 
 

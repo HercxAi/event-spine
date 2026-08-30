@@ -914,6 +914,41 @@ class CliTests(unittest.TestCase):
             names = {row["decade"] for row in payload["decades"]}
             self.assertTrue({"2010s", "2020s"} <= names)
 
+    def test_segment_missing_store(self) -> None:
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.jsonl"
+            with patch("sys.stderr", new=StringIO()) as err:
+                code = main(["segment", "--store", str(missing)])
+            self.assertEqual(code, 2)
+            self.assertIn("no event log", err.getvalue())
+
+    def test_segment_json_object(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "day.jsonl"
+            with patch("sys.stdout", new=StringIO()):
+                self.assertEqual(main(["simulate", "--out", str(path), "--seed", "42"]), 0)
+            before = path.read_text(encoding="utf-8")
+            with patch("sys.stdout", new=StringIO()) as out:
+                code = main(["segment", "--store", str(path), "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            payload = json.loads(out.getvalue())
+            self.assertIsInstance(payload, dict)
+            self.assertIn("segments", payload)
+            self.assertGreater(len(payload["segments"]), 0)
+            first = payload["segments"][0]
+            for key in (
+                "segment",
+                "tickets",
+                "closed",
+                "open",
+                "revenue_cents",
+                "dwell_p50_min",
+            ):
+                self.assertIn(key, first)
+            names = {row["segment"] for row in payload["segments"]}
+            self.assertTrue({"car", "suv", "truck", "luxury"} <= names)
+
     def test_simulate_replaces_file_store_only_appends(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "day.jsonl"

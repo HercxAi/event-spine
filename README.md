@@ -72,6 +72,8 @@ python -m event_spine origin
 python -m event_spine origin --json
 python -m event_spine decade
 python -m event_spine decade --json
+python -m event_spine segment
+python -m event_spine segment --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -308,6 +310,26 @@ cents), and Hyndman-Fan type-7 dwell p50. Sorted highest revenue
 first, then newest decade. `decade --json` emits the same fold as
 a JSON object (cents stay ints).
 
+`segment` folds the same log into one row per vehicle market
+segment (luxury, truck, suv, car) classified from `TicketOpened`
+make/model. Pickup names win even on a luxury badge; luxury makes
+beat SUV names; everything else with a parseable plate is car.
+Tickets, closed vs still-open, closed-ticket revenue (integer
+cents), and Hyndman-Fan p50 dwell. Still-open tickets count toward
+tickets/open, not revenue or dwell. Sorted highest revenue first.
+`segment --json` emits the same fold as a JSON object (cents stay
+ints).
+
+## 2026-08-30
+
+`segment` rebuilds one row per market segment from the same plate
+(`2018 Honda Civic` → car, `2021 Toyota RAV4` → suv,
+`2015 Ford F-150` → truck, `2017 BMW 328i` → luxury). A pickup
+beats a luxury badge (`2024 Tesla Cybertruck` → truck).
+Closed-ticket line totals become revenue; leftover open tickets
+stay in the open column. Human screen prints dollars; `--json`
+keeps cents as numbers. Run
+`python -m event_spine segment` or `python -m event_spine segment --json`.
 
 ## 2026-08-29
 
@@ -518,10 +540,11 @@ event_spine/body.py       per-body tickets, revenue, dwell
 event_spine/age.py        per-age-band tickets, revenue, dwell
 event_spine/origin.py     per-origin tickets, revenue, dwell
 event_spine/decade.py     per-decade tickets, revenue, dwell
+event_spine/segment.py    per-segment tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | pay | reason | replay
 ```
 
 ## License
