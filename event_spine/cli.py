@@ -1,4 +1,4 @@
-"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, fold models, fold bodies, fold ages, fold origins, fold decades, fold segments, or fold payment methods."""
+"""simulate a day, detect anomalies, summarize the log, print a daily brief, replay tickets, fold hours, list silent gaps, fold SKUs, fold bays, fold dwell, fold size, fold lines, fold tries, fold vehicles, fold makes, fold years, fold models, fold bodies, fold ages, fold origins, fold decades, fold segments, fold grades, or fold payment methods."""
 
 from __future__ import annotations
 
@@ -57,6 +57,8 @@ from event_spine.report import (
     render_decade_json,
     render_segment,
     render_segment_json,
+    render_grade,
+    render_grade_json,
 )
 from event_spine.simulate import SimConfig, simulate_day
 from event_spine.store import JsonlEventStore
@@ -268,6 +270,18 @@ def main(argv: list[str] | None = None) -> int:
         help="print the segment fold as a JSON object",
     )
 
+    gd = sub.add_parser(
+        "grade",
+        help="per-grade tickets, revenue, and dwell rebuilt from LineItemAdded oil SKUs",
+    )
+    gd.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    gd.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the grade fold as a JSON object",
+    )
+
     ln = sub.add_parser(
         "lines",
         help="closed-ticket line-count bands rebuilt from the ticket projection",
@@ -374,6 +388,8 @@ def main(argv: list[str] | None = None) -> int:
         return _decade(args.store, args.as_json)
     if args.cmd == "segment":
         return _segment(args.store, args.as_json)
+    if args.cmd == "grade":
+        return _grade(args.store, args.as_json)
     if args.cmd == "lines":
         return _lines(args.store, args.as_json)
     if args.cmd == "tries":
@@ -633,6 +649,17 @@ def _segment(path: Path, as_json: bool = False) -> int:
         print(render_segment_json(events), end="")
     else:
         print(render_segment(events), end="")
+    return 0
+
+
+def _grade(path: Path, as_json: bool = False) -> int:
+    events = _load(path)
+    if not events:
+        return 2
+    if as_json:
+        print(render_grade_json(events), end="")
+    else:
+        print(render_grade(events), end="")
     return 0
 
 

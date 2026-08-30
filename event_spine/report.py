@@ -21,6 +21,7 @@ from event_spine.age import AgeRow, by_age
 from event_spine.origin import OriginRow, by_origin
 from event_spine.decade import DecadeRow, by_decade
 from event_spine.segment import SegmentRow, by_segment
+from event_spine.grade import GradeRow, by_grade
 from event_spine.dwell import DwellRow, by_dwell
 from event_spine.size import SizeRow, by_size
 from event_spine.lines import LinesRow, by_lines
@@ -787,6 +788,59 @@ def render_segment_json(events: list[Event], rows: list[SegmentRow] | None = Non
         "segments": [
             {
                 "segment": row.segment,
+                "tickets": row.tickets,
+                "closed": row.closed,
+                "open": row.open,
+                "revenue_cents": row.revenue_cents,
+                "dwell_p50_min": row.dwell_p50_min,
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def render_grade(events: list[Event], rows: list[GradeRow] | None = None) -> str:
+    """One line per oil grade rebuilt from LineItemAdded SKUs, highest revenue first."""
+    if rows is None:
+        rows = by_grade(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_rev = sum(row.revenue_cents for row in rows)
+    total_tickets = sum(row.tickets for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  grade",
+        f"{len(rows)} grades  ·  {total_tickets} tickets  ·  rev {fmt_cents(total_rev)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no tickets")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        if row.dwell_p50_min is None:
+            dwell = "dwell  —"
+        else:
+            dwell = f"dwell p50 {row.dwell_p50_min:.1f}min"
+        name = row.grade if row.grade else "—"
+        lines.append(
+            f"{name:<16} tickets {row.tickets:<3} "
+            f"closed {row.closed:<3} open {row.open:<3} "
+            f"{fmt_cents(row.revenue_cents):>10}  {dwell}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_grade_json(events: list[Event], rows: list[GradeRow] | None = None) -> str:
+    """JSON object for the grade fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_grade(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "grades": [
+            {
+                "grade": row.grade,
                 "tickets": row.tickets,
                 "closed": row.closed,
                 "open": row.open,

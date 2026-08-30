@@ -74,6 +74,8 @@ python -m event_spine decade
 python -m event_spine decade --json
 python -m event_spine segment
 python -m event_spine segment --json
+python -m event_spine grade
+python -m event_spine grade --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -320,6 +322,16 @@ tickets/open, not revenue or dwell. Sorted highest revenue first.
 `segment --json` emits the same fold as a JSON object (cents stay
 ints).
 
+`grade` folds the same log into one row per oil grade
+(conventional, synthetic, full-synth) classified from
+`LineItemAdded` oil SKUs (`OIL-CONV`, `OIL-SYN`, `OIL-FS`). Highest
+grade wins when a ticket has more than one oil SKU; no oil SKU
+stays empty. Tickets, closed vs still-open, closed-ticket revenue
+(integer cents), and Hyndman-Fan p50 dwell. Still-open tickets
+count toward tickets/open, not revenue or dwell. Sorted highest
+revenue first. `grade --json` emits the same fold as a JSON object
+(cents stay ints).
+
 ## 2026-08-30
 
 `segment` rebuilds one row per market segment from the same plate
@@ -541,10 +553,11 @@ event_spine/age.py        per-age-band tickets, revenue, dwell
 event_spine/origin.py     per-origin tickets, revenue, dwell
 event_spine/decade.py     per-decade tickets, revenue, dwell
 event_spine/segment.py    per-segment tickets, revenue, dwell
+event_spine/grade.py      per-grade tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | grade | pay | reason | replay
 ```
 
 ## License
