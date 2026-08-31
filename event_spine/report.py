@@ -26,6 +26,7 @@ from event_spine.viscosity import ViscosityRow, by_viscosity
 from event_spine.family import FamilyRow, by_family
 from event_spine.shift import ShiftRow, by_shift
 from event_spine.outcome import OutcomeRow, by_outcome
+from event_spine.tender import TenderRow, by_tender
 from event_spine.dwell import DwellRow, by_dwell
 from event_spine.size import SizeRow, by_size
 from event_spine.lines import LinesRow, by_lines
@@ -1061,6 +1062,60 @@ def render_outcome_json(events: list[Event], rows: list[OutcomeRow] | None = Non
         "outcomes": [
             {
                 "outcome": row.outcome,
+                "tickets": row.tickets,
+                "closed": row.closed,
+                "open": row.open,
+                "revenue_cents": row.revenue_cents,
+                "dwell_p50_min": row.dwell_p50_min,
+            }
+            for row in rows
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+
+def render_tender(events: list[Event], rows: list[TenderRow] | None = None) -> str:
+    """One line per winning tender rebuilt from payment events, highest revenue first."""
+    if rows is None:
+        rows = by_tender(events)
+    day = events[0].occurred_at.date().isoformat() if events else "—"
+    total_rev = sum(row.revenue_cents for row in rows)
+    total_tickets = sum(row.tickets for row in rows)
+    lines = [
+        f"{SHOP}  ·  {day}  ·  {len(events)} events  ·  tender",
+        f"{len(rows)} tenders  ·  {total_tickets} tickets  ·  rev {fmt_cents(total_rev)}",
+        "",
+    ]
+    if not rows:
+        lines.append("no tickets")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        if row.dwell_p50_min is None:
+            dwell = "dwell  —"
+        else:
+            dwell = f"dwell p50 {row.dwell_p50_min:.1f}min"
+        name = row.tender if row.tender else "—"
+        lines.append(
+            f"{name:<16} tickets {row.tickets:<3} "
+            f"closed {row.closed:<3} open {row.open:<3} "
+            f"{fmt_cents(row.revenue_cents):>10}  {dwell}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_tender_json(events: list[Event], rows: list[TenderRow] | None = None) -> str:
+    """JSON object for the tender fold. Human stdout stays the default."""
+    if rows is None:
+        rows = by_tender(events)
+    day = events[0].occurred_at.date().isoformat() if events else None
+    payload: dict[str, Any] = {
+        "shop": SHOP,
+        "day": day,
+        "events": len(events),
+        "tenders": [
+            {
+                "tender": row.tender,
                 "tickets": row.tickets,
                 "closed": row.closed,
                 "open": row.open,

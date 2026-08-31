@@ -84,6 +84,8 @@ python -m event_spine shift
 python -m event_spine shift --json
 python -m event_spine outcome
 python -m event_spine outcome --json
+python -m event_spine tender
+python -m event_spine tender --json
 python -m event_spine size
 python -m event_spine size --json
 python -m event_spine lines
@@ -387,6 +389,30 @@ or dwell. Sorted highest revenue first, then clean / recovered /
 unpaid / open. `outcome --json` emits the same fold as a JSON
 object (cents stay ints).
 
+`tender` folds the same log into one row per winning tender
+(`card`, `cash`, plus `unpaid` / `open`) rebuilt from the ticket
+projection. The win is the method on the last successful
+`PaymentCaptured` for a closed and paid ticket; closed without a
+full capture lands in unpaid; still-open tickets stay open. The
+seeded day splits mostly card with a cash minority beside the
+leftover open bay. Tickets, closed vs still-open, closed-ticket
+revenue (integer cents), and Hyndman-Fan p50 dwell. Still-open
+tickets count toward tickets/open, not revenue or dwell. Sorted
+highest revenue first, then card / cash / unpaid / open.
+`tender --json` emits the same fold as a JSON object (cents stay
+ints).
+
+
+## 2026-08-31
+
+`tender` rebuilds one row per winning tender from the method on
+the last successful `PaymentCaptured` for each closed and paid
+ticket (`card`, `cash`), with closed-unpaid and still-open tickets
+in their own buckets. Closed-ticket line totals become revenue;
+leftover open tickets stay in the open column. Human screen
+prints dollars; `--json` keeps cents as numbers. Run
+`python -m event_spine tender` or `python -m event_spine tender --json`.
+
 
 ## 2026-08-30
 
@@ -649,10 +675,11 @@ event_spine/viscosity.py  per-viscosity tickets, revenue, dwell
 event_spine/family.py     per-family tickets, revenue, dwell
 event_spine/shift.py      per-shift tickets, revenue, dwell
 event_spine/outcome.py    per-outcome tickets, revenue, dwell
+event_spine/tender.py     per-tender tickets, revenue, dwell
 event_spine/pay.py        per-method captured vs failed
 event_spine/reason.py     PaymentFailed reason fold
 event_spine/report.py     stdout
-event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | grade | viscosity | family | shift | outcome | pay | reason | replay
+event_spine/cli.py        simulate | detect | stats | hours | gaps | brief | sku | bay | dwell | size | lines | tries | vehicle | make | year | model | body | age | origin | decade | segment | grade | viscosity | family | shift | outcome | tender | pay | reason | replay
 ```
 
 ## License
